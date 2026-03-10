@@ -1,0 +1,7 @@
+# SPT Mentoring Platform – Blocked Terms List
+# Lines starting with # are comments
+# Add one term per line (case-insensitive)
+# These terms will BLOCK a message from being delivered entirely
+
+# Example safeguarding / abuse-prevention terms
+# (populate with appropriate terms per safeguarding policy)

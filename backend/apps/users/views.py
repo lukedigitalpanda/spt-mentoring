@@ -36,6 +36,16 @@ class UserViewSet(viewsets.ModelViewSet):
             return [IsAdminOrSelf()]
         return [IsAuthenticated()]
 
+    @action(detail=False, methods=['get', 'patch'], permission_classes=[IsAuthenticated])
+    def me(self, request):
+        """Return or update the currently authenticated user."""
+        if request.method == 'PATCH':
+            serializer = UserSerializer(request.user, data=request.data, partial=True, context={'request': request})
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data)
+        return Response(UserSerializer(request.user, context={'request': request}).data)
+
     @action(detail=False, methods=['get'], permission_classes=[IsAdminUser])
     def export(self, request):
         """Export all users as CSV data."""

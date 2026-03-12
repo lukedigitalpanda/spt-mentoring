@@ -175,3 +175,106 @@ export interface PaginatedResponse<T> {
   previous: string | null;
   results: T[];
 }
+
+// ── Sessions ──────────────────────────────────────────────────────────────────
+
+export interface AvailabilitySlot {
+  id: number;
+  mentor: number;
+  mentor_name: string;
+  start_time: string;
+  end_time: string;
+  is_booked: boolean;
+  notes: string;
+}
+
+export interface SessionFeedback {
+  id: number;
+  session: number;
+  from_user: number;
+  from_user_name: string;
+  rating: number;
+  highlights: string;
+  improvements: string;
+  would_recommend: boolean | null;
+  created_at: string;
+}
+
+export interface MentoringSession {
+  id: number;
+  mentor: number;
+  mentor_name: string;
+  scholar: number;
+  scholar_name: string;
+  slot: number | null;
+  title: string;
+  start_time: string;
+  end_time: string;
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'no_show';
+  meeting_url: string;
+  agenda: string;
+  mentor_notes: string;
+  scholar_notes: string;
+  duration_minutes: number;
+  feedback: SessionFeedback[];
+  created_at: string;
+}
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+export type NotificationType =
+  | 'session_request' | 'session_confirmed' | 'session_cancelled'
+  | 'session_reminder' | 'session_feedback' | 'message'
+  | 'match' | 'forum_reply' | 'survey' | 'goal' | 'system';
+
+export interface Notification {
+  id: number;
+  notification_type: NotificationType;
+  title: string;
+  body: string;
+  link: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+// ── Goals ─────────────────────────────────────────────────────────────────────
+
+export interface GoalMilestone {
+  id: number;
+  goal: number;
+  title: string;
+  is_completed: boolean;
+  completed_at: string | null;
+  due_date: string | null;
+}
+
+export interface Goal {
+  id: number;
+  user: number;
+  title: string;
+  description: string;
+  category: 'career' | 'technical' | 'personal' | 'academic' | 'networking' | 'other';
+  status: 'active' | 'completed' | 'paused';
+  due_date: string | null;
+  created_at: string;
+  completed_at: string | null;
+  milestones: GoalMilestone[];
+  milestone_count: number;
+  completed_milestone_count: number;
+  progress_percent: number;
+}
+
+// ── Waiting List ──────────────────────────────────────────────────────────────
+
+export interface WaitingListEntry {
+  id: number;
+  scholar: number;
+  scholar_name: string;
+  preferred_mentor: number | null;
+  preferred_mentor_name: string;
+  engineering_discipline: string;
+  notes: string;
+  requested_at: string;
+  is_matched: boolean;
+  matched_at: string | null;
+}

@@ -1,16 +1,19 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../utils/api';
 import { useAuth } from '../hooks/useAuth';
 
-type Tab = 'contact-report' | 'sponsor-updates' | 'users' | 'moderation' | 'mass-message';
+type Tab = 'dashboard' | 'contact-report' | 'sponsor-updates' | 'users' | 'moderation' | 'mass-message' | 'waiting-list' | 'sessions';
 
 const tabs: [Tab, string][] = [
+  ['dashboard',       '📊 Dashboard'],
   ['contact-report',  'Contact Report'],
   ['sponsor-updates', 'Sponsor Updates'],
   ['users',           'User Management'],
   ['moderation',      'Moderation Queue'],
   ['mass-message',    'Mass Message'],
+  ['waiting-list',    'Waiting List'],
+  ['sessions',        'Sessions'],
 ];
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
@@ -325,7 +328,7 @@ function MassMessageTab() {
 // ── Page shell ────────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const { user } = useAuth();
-  const [tab, setTab] = useState<Tab>('contact-report');
+  const [tab, setTab] = useState<Tab>('dashboard');
 
   if (user?.role !== 'admin') {
     return (
@@ -345,15 +348,15 @@ export default function AdminPage() {
       </div>
 
       {/* Tab bar */}
-      <div className="bg-white rounded-2xl shadow-card p-1.5 inline-flex gap-1 mb-6">
+      <div className="flex flex-wrap gap-1 mb-6">
         {tabs.map(([key, label]) => (
           <button
             key={key}
             onClick={() => setTab(key)}
-            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
               tab === key
                 ? 'bg-gradient-brand-soft text-white shadow-brand'
-                : 'text-navy-DEFAULT/60 hover:text-navy-DEFAULT hover:bg-purple-50'
+                : 'bg-white text-navy-DEFAULT/60 shadow-card hover:text-navy-DEFAULT hover:shadow-brand'
             }`}
           >
             {label}
@@ -362,11 +365,239 @@ export default function AdminPage() {
       </div>
 
       {/* Tab content */}
+      {tab === 'dashboard'       && <DashboardTab />}
       {tab === 'contact-report'  && <ContactReportTab />}
       {tab === 'sponsor-updates' && <SponsorUpdateTab />}
       {tab === 'users'           && <UserManagementTab />}
       {tab === 'moderation'      && <ModerationQueueTab />}
       {tab === 'mass-message'    && <MassMessageTab />}
+      {tab === 'waiting-list'    && <WaitingListTab />}
+      {tab === 'sessions'        && <AdminSessionsTab />}
+    </div>
+  );
+}
+
+// ── Dashboard tab ─────────────────────────────────────────────────────────────
+function DashboardTab() {
+  const { data: users }    = useQuery({ queryKey: ['admin-users'],    queryFn: () => api.get('/users/?page_size=200').then(r => r.data) });
+  const { data: sessions } = useQuery({ queryKey: ['admin-sessions'], queryFn: () => api.get('/sessions/sessions/?page_size=200').then(r => r.data) });
+  const { data: goals }    = useQuery({ queryKey: ['admin-goals'],    queryFn: () => api.get('/goals/goals/?page_size=200').then(r => r.data) });
+  const { data: waiting }  = useQuery({ queryKey: ['admin-waiting'],  queryFn: () => api.get('/users/waiting-list/?is_matched=false').then(r => r.data) });
+
+  const userList: any[] = users?.results ?? [];
+  const sessionList: any[] = sessions?.results ?? [];
+  const goalList: any[] = goals?.results ?? [];
+
+  const roleCount = (role: string) => userList.filter((u: any) => u.role === role).length;
+  const sessionsByStatus = (s: string) => sessionList.filter((x: any) => x.status === s).length;
+
+  const kpis = [
+    { label: 'Total Users',       value: users?.count    ?? '—', sub: 'on platform',         accent: true  },
+    { label: 'Active Sessions',   value: sessionsByStatus('confirmed'), sub: 'confirmed upcoming' },
+    { label: 'Active Goals',      value: goalList.filter((g: any) => g.status === 'active').length, sub: 'in progress' },
+    { label: 'Waiting List',      value: waiting?.count  ?? '—', sub: 'unmatched scholars'   },
+    { label: 'Scholars',          value: roleCount('scholar'),   sub: 'on platform'           },
+    { label: 'Mentors',           value: roleCount('mentor'),    sub: 'on platform'           },
+    { label: 'Sessions Complete', value: sessionsByStatus('completed'), sub: 'all time'       },
+    { label: 'Goals Completed',   value: goalList.filter((g: any) => g.status === 'completed').length, sub: 'all time' },
+  ];
+
+  // Simple bar chart using CSS
+  const sessionPhases = [
+    { label: 'Pending',   count: sessionsByStatus('pending'),   colour: 'bg-yellow-400' },
+    { label: 'Confirmed', count: sessionsByStatus('confirmed'), colour: 'bg-green-400'  },
+    { label: 'Completed', count: sessionsByStatus('completed'), colour: 'bg-purple-400' },
+    { label: 'Cancelled', count: sessionsByStatus('cancelled'), colour: 'bg-red-400'    },
+  ];
+  const maxSessions = Math.max(...sessionPhases.map(s => s.count), 1);
+
+  const goalCategories = ['career','technical','personal','academic','networking','other'];
+  const goalCatCounts = goalCategories.map(c => ({
+    label: c, count: goalList.filter((g: any) => g.category === c).length,
+  }));
+  const maxGoals = Math.max(...goalCatCounts.map(g => g.count), 1);
+
+  return (
+    <div className="space-y-8">
+      {/* KPI grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {kpis.map(k => (
+          <div key={k.label} className={`rounded-2xl p-5 shadow-card ${k.accent ? 'bg-gradient-brand-soft text-white shadow-brand' : 'bg-white'}`}>
+            <p className={`text-[10px] font-semibold uppercase tracking-wider ${k.accent ? 'text-white/70' : 'text-navy-DEFAULT/40'}`}>{k.label}</p>
+            <p className={`text-2xl font-extrabold mt-1 ${k.accent ? 'text-white' : 'text-navy-DEFAULT'}`}>{k.value}</p>
+            <p className={`text-[10px] mt-0.5 ${k.accent ? 'text-white/60' : 'text-navy-DEFAULT/40'}`}>{k.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Sessions by status bar chart */}
+        <div className="bg-white rounded-2xl shadow-card p-5">
+          <h3 className="text-sm font-bold text-navy-DEFAULT mb-4">Sessions by Status</h3>
+          <div className="space-y-3">
+            {sessionPhases.map(phase => (
+              <div key={phase.label} className="flex items-center gap-3">
+                <span className="text-xs text-navy-DEFAULT/50 w-20 capitalize">{phase.label}</span>
+                <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+                  <div className={`${phase.colour} h-4 rounded-full transition-all`}
+                    style={{ width: `${(phase.count / maxSessions) * 100}%` }} />
+                </div>
+                <span className="text-xs font-bold text-navy-DEFAULT w-6 text-right">{phase.count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Goals by category */}
+        <div className="bg-white rounded-2xl shadow-card p-5">
+          <h3 className="text-sm font-bold text-navy-DEFAULT mb-4">Goals by Category</h3>
+          <div className="space-y-3">
+            {goalCatCounts.map(cat => (
+              <div key={cat.label} className="flex items-center gap-3">
+                <span className="text-xs text-navy-DEFAULT/50 w-20 capitalize">{cat.label}</span>
+                <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+                  <div className="bg-gradient-brand-soft h-4 rounded-full transition-all"
+                    style={{ width: `${(cat.count / maxGoals) * 100}%` }} />
+                </div>
+                <span className="text-xs font-bold text-navy-DEFAULT w-6 text-right">{cat.count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* User role breakdown */}
+        <div className="bg-white rounded-2xl shadow-card p-5">
+          <h3 className="text-sm font-bold text-navy-DEFAULT mb-4">Users by Role</h3>
+          <div className="space-y-3">
+            {['scholar','mentor','sponsor','alumni','admin'].map(role => {
+              const count = roleCount(role);
+              const pct = userList.length ? (count / userList.length) * 100 : 0;
+              return (
+                <div key={role} className="flex items-center gap-3">
+                  <span className="text-xs text-navy-DEFAULT/50 w-20 capitalize">{role}</span>
+                  <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+                    <div className="bg-pink-DEFAULT h-4 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="text-xs font-bold text-navy-DEFAULT w-6 text-right">{count}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Goal status breakdown */}
+        <div className="bg-white rounded-2xl shadow-card p-5">
+          <h3 className="text-sm font-bold text-navy-DEFAULT mb-4">Goal Status</h3>
+          <div className="space-y-3">
+            {['active','completed','paused'].map(status => {
+              const count = goalList.filter((g: any) => g.status === status).length;
+              const pct = goalList.length ? (count / goalList.length) * 100 : 0;
+              const colours: Record<string,string> = { active: 'bg-green-400', completed: 'bg-purple-400', paused: 'bg-yellow-400' };
+              return (
+                <div key={status} className="flex items-center gap-3">
+                  <span className="text-xs text-navy-DEFAULT/50 w-20 capitalize">{status}</span>
+                  <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+                    <div className={`${colours[status]} h-4 rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="text-xs font-bold text-navy-DEFAULT w-6 text-right">{count}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Waiting list tab ──────────────────────────────────────────────────────────
+function WaitingListTab() {
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ['waiting-list-admin'],
+    queryFn: () => api.get('/users/waiting-list/').then(r => r.data),
+  });
+
+  const matchEntry = useMutation({
+    mutationFn: (id: number) => api.post(`/users/waiting-list/${id}/match/`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['waiting-list-admin'] }),
+  });
+
+  if (isLoading) return <div className="flex justify-center py-8"><div className="w-7 h-7 border-2 border-purple-DEFAULT/30 border-t-pink-DEFAULT rounded-full animate-spin" /></div>;
+
+  return (
+    <div>
+      <SectionHeader title="Mentor Waiting List" sub="Scholars awaiting mentor assignment" />
+      {!data?.results?.length ? (
+        <p className="text-center py-12 text-sm text-navy-DEFAULT/40">No scholars on the waiting list.</p>
+      ) : (
+        <DataTable headers={['Scholar', 'Discipline', 'Preferred Mentor', 'Requested', 'Status', 'Actions']}>
+          {data.results.map((e: any) => (
+            <tr key={e.id} className="hover:bg-purple-50/30">
+              <td className="px-4 py-3 text-sm font-medium text-navy-DEFAULT">{e.scholar_name}</td>
+              <td className="px-4 py-3 text-xs text-navy-DEFAULT/60">{e.engineering_discipline || '—'}</td>
+              <td className="px-4 py-3 text-xs text-navy-DEFAULT/60">{e.preferred_mentor_name || 'Any'}</td>
+              <td className="px-4 py-3 text-xs text-navy-DEFAULT/40">{new Date(e.requested_at).toLocaleDateString('en-GB')}</td>
+              <td className="px-4 py-3">
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${e.is_matched ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                  {e.is_matched ? 'Matched' : 'Waiting'}
+                </span>
+              </td>
+              <td className="px-4 py-3">
+                {!e.is_matched && (
+                  <button onClick={() => matchEntry.mutate(e.id)}
+                    className="text-xs font-semibold text-pink-DEFAULT hover:underline">
+                    Mark matched
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </DataTable>
+      )}
+    </div>
+  );
+}
+
+// ── Sessions admin tab ────────────────────────────────────────────────────────
+function AdminSessionsTab() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['admin-sessions-tab'],
+    queryFn: () => api.get('/sessions/sessions/?page_size=50').then(r => r.data),
+  });
+
+  const statusColour: Record<string, string> = {
+    pending:   'bg-yellow-100 text-yellow-700',
+    confirmed: 'bg-green-100  text-green-700',
+    cancelled: 'bg-red-100    text-red-500',
+    completed: 'bg-purple-100 text-purple-700',
+    no_show:   'bg-gray-100   text-gray-500',
+  };
+
+  if (isLoading) return <div className="flex justify-center py-8"><div className="w-7 h-7 border-2 border-purple-DEFAULT/30 border-t-pink-DEFAULT rounded-full animate-spin" /></div>;
+
+  return (
+    <div>
+      <SectionHeader title="All Mentoring Sessions" sub="Overview of every session on the platform" />
+      {!data?.results?.length ? (
+        <p className="text-center py-12 text-sm text-navy-DEFAULT/40">No sessions recorded yet.</p>
+      ) : (
+        <DataTable headers={['Scholar', 'Mentor', 'Title', 'Date', 'Status']}>
+          {data.results.map((s: any) => (
+            <tr key={s.id} className="hover:bg-purple-50/30">
+              <td className="px-4 py-3 text-sm font-medium text-navy-DEFAULT">{s.scholar_name}</td>
+              <td className="px-4 py-3 text-xs text-navy-DEFAULT/60">{s.mentor_name}</td>
+              <td className="px-4 py-3 text-xs text-navy-DEFAULT/60">{s.title}</td>
+              <td className="px-4 py-3 text-xs text-navy-DEFAULT/40">{new Date(s.start_time).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+              <td className="px-4 py-3">
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full capitalize ${statusColour[s.status] ?? ''}`}>
+                  {s.status.replace('_', ' ')}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </DataTable>
+      )}
     </div>
   );
 }

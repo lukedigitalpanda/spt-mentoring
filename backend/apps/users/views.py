@@ -3,9 +3,11 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import User, MentoringMatch
+from django.utils import timezone
+from .models import User, MentoringMatch, MentorWaitingList
 from .serializers import (
-    UserSerializer, UserListSerializer, UserCreateSerializer, MentoringMatchSerializer
+    UserSerializer, UserListSerializer, UserCreateSerializer,
+    MentoringMatchSerializer, MentorWaitingListSerializer,
 )
 from .filters import UserFilter
 from .permissions import IsAdminOrSelf
@@ -122,3 +124,84 @@ class MentoringMatchViewSet(viewsets.ModelViewSet):
             active_match_count=Count('mentor_matches', filter=Q(mentor_matches__is_active=True))
         ).filter(active_match_count__lt=3)  # default max
         return Response(UserListSerializer(mentors, many=True).data)
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def me(self, request):
+        """Return the authenticated user's own profile."""
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated], url_path='mentors')
+    def mentors(self, request):
+        """
+        Discoverable mentor list with avg_rating, discipline filter and availability.
+        Used by the Mentor Discovery page.
+        """
+        from django.db.models import Avg, Count, Q
+        from apps.sessions.models import AvailabilitySlot
+
+        qs = User.objects.filter(role=User.Role.MENTOR, is_active=True)
+
+        # Optional discipline filter
+        discipline = request.query_params.get('discipline')
+        if discipline:
+            qs = qs.filter(engineering_discipline__icontains=discipline)
+
+        # Annotate avg rating (from session feedback) and session count
+        qs = qs.annotate(
+            avg_rating=Avg('mentor_sessions__feedback__rating'),
+            session_count=Count('mentor_sessions', filter=Q(mentor_sessions__status='completed')),
+        )
+
+        # Optional availability filter
+        available_only = request.query_params.get('available') == '1'
+        if available_only:
+            booked_slots = AvailabilitySlot.objects.filter(
+                is_booked=False,
+                start_time__gt=timezone.now(),
+                mentor__in=qs,
+            ).values_list('mentor_id', flat=True).distinct()
+            qs = qs.filter(pk__in=booked_slots)
+
+        qs = qs.order_by('-avg_rating', 'last_name')
+
+        data = UserListSerializer(qs, many=True).data
+        # Merge annotations into the serialized output
+        ann_map = {u.pk: {'avg_rating': u.avg_rating, 'session_count': u.session_count} for u in qs}
+        for item in data:
+            extra = ann_map.get(item['id'], {})
+            item['avg_rating'] = round(extra.get('avg_rating') or 0, 1)
+            item['session_count'] = extra.get('session_count') or 0
+
+        return Response(data)
+
+
+class MentorWaitingListViewSet(viewsets.ModelViewSet):
+    """Scholar waiting list for mentor assignment."""
+    serializer_class = MentorWaitingListSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['is_matched', 'engineering_discipline']
+    search_fields = ['scholar__first_name', 'scholar__last_name', 'engineering_discipline']
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff or user.role == 'admin':
+            return MentorWaitingList.objects.select_related('scholar', 'preferred_mentor').all()
+        return MentorWaitingList.objects.filter(scholar=user)
+
+    def get_permissions(self):
+        if self.action == 'destroy':
+            return [IsAdminUser()]
+        return [IsAuthenticated()]
+
+    def perform_create(self, serializer):
+        serializer.save(scholar=self.request.user)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
+    def match(self, request, pk=None):
+        """Mark a waiting list entry as matched."""
+        entry = self.get_object()
+        entry.is_matched = True
+        entry.matched_at = timezone.now()
+        entry.save(update_fields=['is_matched', 'matched_at'])
+        return Response(MentorWaitingListSerializer(entry).data)

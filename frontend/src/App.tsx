@@ -13,6 +13,10 @@ import NewsPage from './pages/NewsPage';
 import NewsArticlePage from './pages/NewsArticlePage';
 import SurveysPage from './pages/SurveysPage';
 import ProfilePage from './pages/ProfilePage';
+import SessionsPage from './pages/SessionsPage';
+import GoalsPage from './pages/GoalsPage';
+import NotificationsPage from './pages/NotificationsPage';
+import MentorDiscoveryPage from './pages/MentorDiscoveryPage';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -51,6 +55,10 @@ function App() {
                     <Route path="/news/:id" element={<NewsArticlePage />} />
                     <Route path="/surveys" element={<SurveysPage />} />
                     <Route path="/profile" element={<ProfilePage />} />
+                    <Route path="/sessions" element={<SessionsPage />} />
+                    <Route path="/goals" element={<GoalsPage />} />
+                    <Route path="/notifications" element={<NotificationsPage />} />
+                    <Route path="/mentors" element={<MentorDiscoveryPage />} />
                   </Routes>
                 </Layout>
               </RequireAuth>

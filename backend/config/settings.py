@@ -39,6 +39,9 @@ INSTALLED_APPS = [
     'apps.surveys',
     'apps.reports',
     'apps.moderation',
+    'apps.sessions',
+    'apps.notifications',
+    'apps.goals',
 ]
 
 MIDDLEWARE = [
@@ -174,6 +177,11 @@ EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='mentoring@spt.org')
+
+# Web Push / VAPID
+VAPID_PRIVATE_KEY = config('VAPID_PRIVATE_KEY', default='')
+VAPID_PUBLIC_KEY = config('VAPID_PUBLIC_KEY', default='')
+VAPID_ADMIN_EMAIL = config('VAPID_ADMIN_EMAIL', default='admin@spt.org')
 
 # Mentoring-specific settings
 MENTORING_FROM_EMAIL = config('MENTORING_FROM_EMAIL', default='mentoring@spt.org')

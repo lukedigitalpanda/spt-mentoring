@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "SPT Mentoring",
+    "slug": "spt-mentoring",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#6b21a8"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "org.spt.mentoring"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#6b21a8"
+      },
+      "package": "org.spt.mentoring"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#6b21a8"
+        }
+      ]
+    ],
+    "scheme": "spt-mentoring",
+    "extra": {
+      "API_BASE_URL": "http://localhost:8000/api"
+    }
+  }
+}

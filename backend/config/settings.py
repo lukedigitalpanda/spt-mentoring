@@ -39,6 +39,9 @@ INSTALLED_APPS = [
     'apps.surveys',
     'apps.reports',
     'apps.moderation',
+    'apps.sessions',
+    'apps.notifications',
+    'apps.goals',
 ]
 
 MIDDLEWARE = [

@@ -20,6 +20,9 @@ urlpatterns = [
     path('api/surveys/', include('apps.surveys.urls')),
     path('api/reports/', include('apps.reports.urls')),
     path('api/moderation/', include('apps.moderation.urls')),
+    path('api/sessions/', include('apps.sessions.urls')),
+    path('api/notifications/', include('apps.notifications.urls')),
+    path('api/goals/', include('apps.goals.urls')),
     # API Schema
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerUIView.as_view(url_name='schema'), name='swagger-ui'),

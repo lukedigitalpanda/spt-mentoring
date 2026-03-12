@@ -142,7 +142,7 @@ function SurveyForm({ survey, onDone }: { survey: Survey; onDone: () => void }) 
     e.preventDefault();
     const answersPayload = Object.entries(answers).map(([qId, val]) => ({
       question: Number(qId),
-      answer_text: Array.isArray(val) ? val.join(', ') : val,
+      value: Array.isArray(val) ? val.join(', ') : val,
     }));
     submitMutation.mutate({ answers: answersPayload });
   };

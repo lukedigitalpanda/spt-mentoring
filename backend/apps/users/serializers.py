@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, MentorProfile, ScholarProfile, SponsorProfile, MentoringMatch
+from .models import User, MentorProfile, ScholarProfile, SponsorProfile, MentoringMatch, MentorWaitingList
 
 
 class MentorProfileSerializer(serializers.ModelSerializer):
@@ -76,3 +76,16 @@ class MentoringMatchSerializer(serializers.ModelSerializer):
         model = MentoringMatch
         fields = '__all__'
         read_only_fields = ['matched_on', 'matched_by']
+
+
+class MentorWaitingListSerializer(serializers.ModelSerializer):
+    scholar_name = serializers.CharField(source='scholar.full_name', read_only=True)
+    preferred_mentor_name = serializers.CharField(source='preferred_mentor.full_name', read_only=True, default='')
+
+    class Meta:
+        model = MentorWaitingList
+        fields = [
+            'id', 'scholar', 'scholar_name', 'preferred_mentor', 'preferred_mentor_name',
+            'engineering_discipline', 'notes', 'requested_at', 'is_matched', 'matched_at',
+        ]
+        read_only_fields = ['scholar', 'requested_at', 'matched_at']

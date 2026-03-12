@@ -1,16 +1,20 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
 import BrandLogo from '../ui/BrandLogo';
+import api from '../../utils/api';
 
 const navItems = [
-  { path: '/',          label: 'Home',      roles: ['scholar','mentor','sponsor','alumni','admin'] },
-  { path: '/messages',  label: 'Messages',  roles: ['scholar','mentor','sponsor','alumni','admin'] },
-  { path: '/forums',    label: 'Forums',    roles: ['scholar','mentor','alumni','admin'] },
-  { path: '/resources', label: 'Resources', roles: ['scholar','mentor','sponsor','alumni','admin'] },
-  { path: '/surveys',   label: 'Surveys',   roles: ['scholar','mentor','admin'] },
-  { path: '/news',      label: 'News',      roles: ['scholar','mentor','sponsor','alumni','admin'] },
-  { path: '/admin',     label: 'Admin',     roles: ['admin'] },
+  { path: '/',           label: 'Home',      roles: ['scholar','mentor','sponsor','alumni','admin'] },
+  { path: '/messages',   label: 'Messages',  roles: ['scholar','mentor','sponsor','alumni','admin'] },
+  { path: '/sessions',   label: 'Sessions',  roles: ['scholar','mentor','alumni','admin'] },
+  { path: '/goals',      label: 'Goals',     roles: ['scholar','mentor','alumni','admin'] },
+  { path: '/forums',     label: 'Forums',    roles: ['scholar','mentor','alumni','admin'] },
+  { path: '/resources',  label: 'Resources', roles: ['scholar','mentor','sponsor','alumni','admin'] },
+  { path: '/surveys',    label: 'Surveys',   roles: ['scholar','mentor','admin'] },
+  { path: '/news',       label: 'News',      roles: ['scholar','mentor','sponsor','alumni','admin'] },
+  { path: '/admin',      label: 'Admin',     roles: ['admin'] },
 ];
 
 const roleBadgeStyle: Record<string, string> = {
@@ -20,6 +24,32 @@ const roleBadgeStyle: Record<string, string> = {
   alumni:   'bg-pink-100  text-pink-700',
   admin:    'bg-gradient-brand-soft text-white',
 };
+
+function NotificationBell() {
+  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const { data } = useQuery<{ count: number }>({
+    queryKey: ['notification-count'],
+    queryFn: () => api.get('/notifications/unread_count/').then(r => r.data),
+    enabled: isAuthenticated,
+    refetchInterval: 30_000,
+  });
+  const count = data?.count ?? 0;
+  return (
+    <button onClick={() => navigate('/notifications')}
+      className="relative p-1.5 text-navy-DEFAULT/50 hover:text-navy-DEFAULT transition-colors">
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+          d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+      </svg>
+      {count > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-pink-DEFAULT rounded-full text-[9px] font-bold text-white flex items-center justify-center">
+          {count > 9 ? '9+' : count}
+        </span>
+      )}
+    </button>
+  );
+}
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
@@ -78,6 +108,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <div className="hidden md:flex items-center space-x-3">
               {user && (
                 <>
+                  <NotificationBell />
                   <Link to="/profile" className="flex items-center space-x-2 group">
                     <div className="w-8 h-8 rounded-full bg-gradient-brand-soft flex items-center justify-center text-white text-xs font-bold shadow-brand">
                       {user.first_name[0]}{user.last_name[0]}

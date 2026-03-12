@@ -157,3 +157,33 @@ class MentoringMatch(models.Model):
 
     def __str__(self):
         return f'{self.scholar.full_name} ↔ {self.mentor.full_name}'
+
+
+class MentorWaitingList(models.Model):
+    """Scholars waiting to be matched with a mentor."""
+    scholar = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='waiting_list_entries',
+        limit_choices_to={'role__in': ['scholar', 'alumni']},
+    )
+    preferred_mentor = models.ForeignKey(
+        User, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='waiting_scholars',
+        limit_choices_to={'role': 'mentor'},
+    )
+    engineering_discipline = models.CharField(max_length=100, blank=True)
+    notes = models.TextField(blank=True)
+    requested_at = models.DateTimeField(auto_now_add=True)
+    is_matched = models.BooleanField(default=False)
+    matched_at = models.DateTimeField(null=True, blank=True)
+
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ['requested_at']
+        unique_together = ('scholar', 'preferred_mentor')
+        verbose_name = 'Mentor Waiting List Entry'
+
+    def __str__(self):
+        return f'{self.scholar.full_name} – waiting for mentor'

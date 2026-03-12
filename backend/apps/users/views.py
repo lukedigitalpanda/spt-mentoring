@@ -3,9 +3,11 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import User, MentoringMatch
+from django.utils import timezone
+from .models import User, MentoringMatch, MentorWaitingList
 from .serializers import (
-    UserSerializer, UserListSerializer, UserCreateSerializer, MentoringMatchSerializer
+    UserSerializer, UserListSerializer, UserCreateSerializer,
+    MentoringMatchSerializer, MentorWaitingListSerializer,
 )
 from .filters import UserFilter
 from .permissions import IsAdminOrSelf
@@ -112,3 +114,40 @@ class MentoringMatchViewSet(viewsets.ModelViewSet):
             active_match_count=Count('mentor_matches', filter=Q(mentor_matches__is_active=True))
         ).filter(active_match_count__lt=3)  # default max
         return Response(UserListSerializer(mentors, many=True).data)
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def me(self, request):
+        """Return the authenticated user's own profile."""
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data)
+
+
+class MentorWaitingListViewSet(viewsets.ModelViewSet):
+    """Scholar waiting list for mentor assignment."""
+    serializer_class = MentorWaitingListSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['is_matched', 'engineering_discipline']
+    search_fields = ['scholar__first_name', 'scholar__last_name', 'engineering_discipline']
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff or user.role == 'admin':
+            return MentorWaitingList.objects.select_related('scholar', 'preferred_mentor').all()
+        return MentorWaitingList.objects.filter(scholar=user)
+
+    def get_permissions(self):
+        if self.action == 'destroy':
+            return [IsAdminUser()]
+        return [IsAuthenticated()]
+
+    def perform_create(self, serializer):
+        serializer.save(scholar=self.request.user)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
+    def match(self, request, pk=None):
+        """Mark a waiting list entry as matched."""
+        entry = self.get_object()
+        entry.is_matched = True
+        entry.matched_at = timezone.now()
+        entry.save(update_fields=['is_matched', 'matched_at'])
+        return Response(MentorWaitingListSerializer(entry).data)

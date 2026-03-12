@@ -36,3 +36,22 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"[{self.notification_type}] {self.title} → {self.user.full_name}"
+
+
+class PushSubscription(models.Model):
+    """Browser Web Push subscription stored per user/device."""
+    user = models.ForeignKey(
+        'users.User', on_delete=models.CASCADE,
+        related_name='push_subscriptions',
+    )
+    endpoint = models.TextField(unique=True)
+    p256dh = models.TextField()
+    auth = models.TextField()
+    user_agent = models.CharField(max_length=300, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Push Subscription'
+
+    def __str__(self):
+        return f"{self.user.email} – {self.endpoint[:60]}"

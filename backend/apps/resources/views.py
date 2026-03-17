@@ -8,8 +8,17 @@ from .serializers import ResourceCategorySerializer, ResourceSerializer, SharedD
 
 
 class ResourceCategoryViewSet(viewsets.ModelViewSet):
-    queryset = ResourceCategory.objects.all()
     serializer_class = ResourceCategorySerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['parent']
+    ordering_fields = ['order', 'name']
+
+    def get_queryset(self):
+        qs = ResourceCategory.objects.all()
+        # ?root=true returns only top-level folders (no parent)
+        if self.request.query_params.get('root') == 'true':
+            qs = qs.filter(parent__isnull=True)
+        return qs
 
     def get_permissions(self):
         if self.action in ('create', 'update', 'partial_update', 'destroy'):
@@ -30,6 +39,8 @@ class ResourceViewSet(viewsets.ModelViewSet):
         if not (user.is_staff or user.role == 'admin'):
             from django.db.models import Q
             qs = qs.filter(Q(audience='all') | Q(audience=user.role))
+        if self.request.query_params.get('no_category') == 'true':
+            qs = qs.filter(category__isnull=True)
         return qs
 
     def get_permissions(self):

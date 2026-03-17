@@ -32,12 +32,12 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     entrypoint: ["/bin/sh", "/app/entrypoint.sh"]
-    command: python manage.py runserver 0.0.0.0:8000
+    command: daphne -b 0.0.0.0 -p 8000 config.asgi:application
+    ports:
+      - "8000:8000"
     volumes:
       - ./backend:/app
       - media_data:/app/media
-    ports:
-      - "8000:8000"
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings
       - DB_HOST=db
@@ -94,7 +94,30 @@ services:
       - ./frontend:/app
       - /app/node_modules
     environment:
-      - VITE_API_URL=http://76.13.254.227:8000/api
+      - VITE_API_URL=/api
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+    command: >
+      /bin/sh -c "while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g 'daemon off;'"
+    depends_on:
+      - backend
+      - frontend
+
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    entrypoint: >
+      /bin/sh -c "trap exit TERM; while :; do certbot renew --quiet; sleep 12h & wait $${!}; done"
 
 volumes:
   postgres_data:

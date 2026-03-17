@@ -30,10 +30,10 @@ const typeColour: Record<string, string> = {
   session_confirmed: 'bg-green-50  text-green-500',
   session_cancelled: 'bg-red-50    text-red-500',
   session_feedback:  'bg-yellow-50 text-yellow-500',
-  message:           'bg-purple-50 text-purple-DEFAULT',
-  match:             'bg-pink-50   text-pink-DEFAULT',
-  survey:            'bg-navy-50   text-navy-DEFAULT',
-  goal:              'bg-orange-50 text-orange-DEFAULT',
+  message:           'bg-purple-50 text-purple-500',
+  match:             'bg-pink-50   text-pink-500',
+  survey:            'bg-navy-50   text-navy-500',
+  goal:              'bg-orange-50 text-orange-500',
   system:            'bg-gray-50   text-gray-500',
 };
 
@@ -80,17 +80,17 @@ export default function NotificationsPage() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <BrandStar />
-            <h1 className="text-xl font-extrabold text-navy-DEFAULT">Notifications</h1>
+            <h1 className="text-xl font-extrabold text-navy-500">Notifications</h1>
           </div>
           {unreadCount > 0 && (
-            <span className="text-xs font-bold bg-pink-DEFAULT text-white px-2 py-0.5 rounded-full">
+            <span className="text-xs font-bold bg-pink-500 text-white px-2 py-0.5 rounded-full">
               {unreadCount} new
             </span>
           )}
         </div>
         {unreadCount > 0 && (
           <button onClick={() => markAllRead.mutate()}
-            className="text-xs font-semibold text-pink-DEFAULT hover:underline">
+            className="text-xs font-semibold text-pink-500 hover:underline">
             Mark all read
           </button>
         )}
@@ -98,10 +98,10 @@ export default function NotificationsPage() {
 
       {isLoading ? (
         <div className="flex justify-center py-16">
-          <div className="w-8 h-8 border-2 border-purple-DEFAULT/30 border-t-pink-DEFAULT rounded-full animate-spin" />
+          <div className="w-8 h-8 border-2 border-purple-500/30 border-t-pink-500 rounded-full animate-spin" />
         </div>
       ) : !data?.results?.length ? (
-        <div className="text-center py-16 text-sm text-navy-DEFAULT/40">
+        <div className="text-center py-16 text-sm text-navy-500/40">
           You're all caught up — no notifications.
         </div>
       ) : (
@@ -117,15 +117,15 @@ export default function NotificationsPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
-                  <p className={`text-sm font-semibold truncate ${notif.is_read ? 'text-navy-DEFAULT/70' : 'text-navy-DEFAULT'}`}>
+                  <p className={`text-sm font-semibold truncate ${notif.is_read ? 'text-navy-500/70' : 'text-navy-500'}`}>
                     {notif.title}
                   </p>
-                  <span className="text-[10px] text-navy-DEFAULT/30 flex-shrink-0">{fmtAgo(notif.created_at)}</span>
+                  <span className="text-[10px] text-navy-500/30 flex-shrink-0">{fmtAgo(notif.created_at)}</span>
                 </div>
-                <p className="text-xs text-navy-DEFAULT/50 mt-0.5 line-clamp-2">{notif.body}</p>
+                <p className="text-xs text-navy-500/50 mt-0.5 line-clamp-2">{notif.body}</p>
               </div>
               {!notif.is_read && (
-                <div className="w-2 h-2 rounded-full bg-pink-DEFAULT flex-shrink-0 mt-1.5" />
+                <div className="w-2 h-2 rounded-full bg-pink-500 flex-shrink-0 mt-1.5" />
               )}
             </button>
           ))}

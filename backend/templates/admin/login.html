@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign In — SPT Mentoring Admin</title>
+  {% load static %}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'admin/css/spt-login.css' %}">
+</head>
+<body>
+  <div class="login-wrap">
+
+    <!-- ── Left gradient panel ── -->
+    <div class="panel">
+      <div class="panel-inner">
+        <img src="{% static 'admin/img/sptlogo.webp' %}" alt="Smallpeice Trust" class="panel-logo">
+        <h1 class="panel-title">Inspiring the<br>next generation<br>of engineers</h1>
+        <p class="panel-sub">The Smallpeice Trust mentoring platform brings together scholars, mentors and sponsors to build careers in engineering.</p>
+        <div class="panel-stats">
+          <div class="stat">
+            <span class="stat-value">60+</span>
+            <span class="stat-label">Years of impact</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value">1,000+</span>
+            <span class="stat-label">Scholars supported</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value">500+</span>
+            <span class="stat-label">Mentor volunteers</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Right form panel ── -->
+    <div class="form-panel">
+      <div class="form-card">
+
+        <div class="card-header">
+          <img src="{% static 'admin/img/sptlogo.webp' %}" alt="Smallpeice Trust" class="card-logo">
+          <h2>Admin Portal</h2>
+          <p>Sign in to manage the mentoring platform</p>
+        </div>
+
+        {% if form.errors %}
+        <div class="alert alert-error">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="flex-shrink:0;margin-top:1px">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+          </svg>
+          <span>Incorrect username or password. Please try again.</span>
+        </div>
+        {% endif %}
+
+        <form method="post" action="{{ app_path }}">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ next }}">
+
+          <div class="field-group">
+            <label for="id_username">Username</label>
+            <input
+              type="text"
+              id="id_username"
+              name="username"
+              autocomplete="username"
+              autofocus
+              maxlength="254"
+              required
+              placeholder="Enter your username"
+            >
+          </div>
+
+          <div class="field-group">
+            <label for="id_password">Password</label>
+            <input
+              type="password"
+              id="id_password"
+              name="password"
+              autocomplete="current-password"
+              required
+              placeholder="••••••••••"
+            >
+          </div>
+
+          <button type="submit" class="btn-signin">
+            Sign in
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+            </svg>
+          </button>
+        </form>
+
+        <p class="help-text">
+          Need access? Contact
+          <a href="mailto:mentoring@smallpeice.org">mentoring@smallpeice.org</a>
+        </p>
+
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

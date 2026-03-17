@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import User, MentorProfile, ScholarProfile, SponsorProfile, MentoringMatch, MentorWaitingList
+from .validators import validate_profile_picture
 
 
 class MentorProfileSerializer(serializers.ModelSerializer):
@@ -28,6 +29,13 @@ class UserSerializer(serializers.ModelSerializer):
     mentor_profile = MentorProfileSerializer(read_only=True)
     scholar_profile = ScholarProfileSerializer(read_only=True)
     sponsor_profile = SponsorProfileSerializer(read_only=True)
+    has_mentor = serializers.SerializerMethodField()
+    profile_picture = serializers.ImageField(validators=[validate_profile_picture], required=False)
+
+    def get_has_mentor(self, obj):
+        if obj.role != 'scholar':
+            return False
+        return MentoringMatch.objects.filter(scholar=obj, is_active=True).exists()
 
     class Meta:
         model = User
@@ -36,7 +44,7 @@ class UserSerializer(serializers.ModelSerializer):
             'role', 'phone', 'bio', 'profile_picture', 'date_of_birth', 'location',
             'engineering_discipline', 'interests', 'notification_email',
             'notification_sms', 'is_verified', 'crm_id', 'is_active',
-            'mentor_profile', 'scholar_profile', 'sponsor_profile',
+            'mentor_profile', 'scholar_profile', 'sponsor_profile', 'has_mentor',
         ]
         read_only_fields = ['is_verified', 'crm_id']
 

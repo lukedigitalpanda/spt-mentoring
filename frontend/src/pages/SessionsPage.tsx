@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import { useAuth } from '../hooks/useAuth';
-import type { MentoringSession, AvailabilitySlot, SessionFeedback, PaginatedResponse } from '../types';
+import type { MentoringSession, AvailabilitySlot, PaginatedResponse } from '../types';
 
 function BrandStar({ size = 16 }: { size?: number }) {
   return (
@@ -30,6 +29,54 @@ function fmtTime(d: string) {
 }
 function fmtDateTime(d: string) { return `${fmtDate(d)} at ${fmtTime(d)}`; }
 
+// ── Weekly slot helpers ────────────────────────────────────────────────────────
+const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const pad = (n: number) => String(n).padStart(2, '0');
+
+function toLocalDT(d: Date) {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// Returns YYYY-MM-DD in the user's local timezone (for grouping)
+function localDateKey(isoStr: string) {
+  const d = new Date(isoStr);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// Build a list of slot datetime pairs from a weekly pattern
+function buildWeeklySlots(days: number[], startHHMM: string, endHHMM: string, weeks: number) {
+  const [sh, sm] = startHHMM.split(':').map(Number);
+  const [eh, em] = endHHMM.split(':').map(Number);
+  const now = new Date();
+
+  // Monday of the current week
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const jsDay = today.getDay(); // 0=Sun, 1=Mon…
+  const daysFromMonday = jsDay === 0 ? 6 : jsDay - 1;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - daysFromMonday);
+
+  const results: { start_time: string; end_time: string }[] = [];
+  for (let w = 0; w < weeks; w++) {
+    for (const d of [...days].sort((a, b) => a - b)) {
+      const base = new Date(monday);
+      base.setDate(monday.getDate() + w * 7 + d);
+      const start = new Date(base.getFullYear(), base.getMonth(), base.getDate(), sh, sm);
+      const end   = new Date(base.getFullYear(), base.getMonth(), base.getDate(), eh, em);
+      if (start > now) results.push({ start_time: toLocalDT(start), end_time: toLocalDT(end) });
+    }
+  }
+  return results;
+}
+
+function groupBy<T>(arr: T[], key: (item: T) => string): Record<string, T[]> {
+  return arr.reduce((acc, item) => {
+    const k = key(item);
+    (acc[k] ??= []).push(item);
+    return acc;
+  }, {} as Record<string, T[]>);
+}
+
 // ── Feedback form ─────────────────────────────────────────────────────────────
 function FeedbackForm({ session, onDone }: { session: MentoringSession; onDone: () => void }) {
   const queryClient = useQueryClient();
@@ -51,51 +98,47 @@ function FeedbackForm({ session, onDone }: { session: MentoringSession; onDone: 
 
   return (
     <div className="bg-white rounded-2xl shadow-card p-6 space-y-5">
-      <h3 className="text-base font-bold text-navy-DEFAULT">Rate your session</h3>
-
-      {/* Star rating */}
+      <h3 className="text-base font-bold text-navy-500">Rate your session</h3>
       <div>
-        <p className="text-xs font-semibold text-navy-DEFAULT/40 uppercase tracking-wider mb-2">Overall rating</p>
+        <p className="text-xs font-semibold text-navy-500/40 uppercase tracking-wider mb-2">Overall rating</p>
         <div className="flex gap-2">
           {[1, 2, 3, 4, 5].map(n => (
             <button key={n} type="button" onClick={() => setRating(n)}
-              className={`w-10 h-10 rounded-xl text-lg transition-all ${rating >= n ? 'text-yellow-400' : 'text-gray-200'}`}>
+              className={`w-10 h-10 rounded-xl text-lg transition-all ${rating >= n ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-300'}`}>
               ★
             </button>
           ))}
         </div>
       </div>
-
       <div>
-        <p className="text-xs font-semibold text-navy-DEFAULT/40 uppercase tracking-wider mb-1">What went well?</p>
+        <p className="text-xs font-semibold text-navy-500/40 uppercase tracking-wider mb-1">What went well?</p>
         <textarea rows={2} value={highlights} onChange={e => setHighlights(e.target.value)}
-          className="w-full border border-purple-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-DEFAULT/30 resize-none"
+          className="w-full border border-purple-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors resize-none"
           placeholder="Highlights from the session…" />
       </div>
       <div>
-        <p className="text-xs font-semibold text-navy-DEFAULT/40 uppercase tracking-wider mb-1">What could improve?</p>
+        <p className="text-xs font-semibold text-navy-500/40 uppercase tracking-wider mb-1">What could improve?</p>
         <textarea rows={2} value={improvements} onChange={e => setImprovements(e.target.value)}
-          className="w-full border border-purple-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-DEFAULT/30 resize-none"
+          className="w-full border border-purple-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors resize-none"
           placeholder="Suggestions for next time…" />
       </div>
       <div>
-        <p className="text-xs font-semibold text-navy-DEFAULT/40 uppercase tracking-wider mb-2">Would you recommend this mentor?</p>
+        <p className="text-xs font-semibold text-navy-500/40 uppercase tracking-wider mb-2">Would you recommend this mentor?</p>
         <div className="flex gap-2">
           {[true, false].map(v => (
             <button key={String(v)} type="button" onClick={() => setWouldRecommend(v)}
-              className={`text-xs font-semibold px-4 py-1.5 rounded-lg border transition-all ${wouldRecommend === v ? 'bg-pink-DEFAULT text-white border-pink-DEFAULT' : 'border-purple-100 text-navy-DEFAULT/60'}`}>
+              className={`text-xs font-semibold px-4 py-1.5 rounded-lg border transition-all ${wouldRecommend === v ? 'bg-pink-500 text-white border-pink-500' : 'border-purple-100 text-navy-500/60'}`}>
               {v ? 'Yes' : 'No'}
             </button>
           ))}
         </div>
       </div>
-
       <div className="flex gap-2 justify-end pt-2">
-        <button onClick={onDone} className="text-xs text-navy-DEFAULT/50 px-3 py-1.5 rounded-lg hover:bg-gray-50">Cancel</button>
+        <button onClick={onDone} className="text-sm text-navy-500/60 px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">Cancel</button>
         <button
           onClick={() => submit.mutate()}
           disabled={rating === 0 || submit.isPending}
-          className="text-xs font-semibold bg-pink-DEFAULT text-white px-4 py-1.5 rounded-lg hover:bg-pink-600 disabled:opacity-50 transition-colors">
+          className="text-sm font-semibold bg-pink-500 text-white px-5 py-2 rounded-lg hover:bg-pink-600 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors">
           {submit.isPending ? 'Submitting…' : 'Submit feedback'}
         </button>
       </div>
@@ -125,24 +168,23 @@ function SessionCard({ session, currentUserId, onAction }: {
               <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize mb-1 inline-block ${statusColour[session.status]}`}>
                 {session.status.replace('_', ' ')}
               </span>
-              <h3 className="font-bold text-sm text-navy-DEFAULT">{session.title}</h3>
-              <p className="text-xs text-navy-DEFAULT/50 mt-0.5">
+              <h3 className="font-bold text-sm text-navy-500">{session.title}</h3>
+              <p className="text-xs text-navy-500/50 mt-0.5">
                 {isMentor ? `Scholar: ${session.scholar_name}` : `Mentor: ${session.mentor_name}`}
               </p>
             </div>
             <div className="text-right flex-shrink-0">
-              <p className="text-xs font-semibold text-navy-DEFAULT">{fmtDate(session.start_time)}</p>
-              <p className="text-xs text-navy-DEFAULT/50">{fmtTime(session.start_time)} – {fmtTime(session.end_time)}</p>
-              <p className="text-[10px] text-navy-DEFAULT/30 mt-0.5">{session.duration_minutes} min</p>
+              <p className="text-xs font-semibold text-navy-500">{fmtDate(session.start_time)}</p>
+              <p className="text-xs text-navy-500/50">{fmtTime(session.start_time)} – {fmtTime(session.end_time)}</p>
+              <p className="text-[10px] text-navy-500/30 mt-0.5">{session.duration_minutes} min</p>
             </div>
           </div>
 
           {session.agenda && (
-            <p className="text-xs text-navy-DEFAULT/60 bg-purple-50 rounded-lg px-3 py-2 mb-3">{session.agenda}</p>
+            <p className="text-xs text-navy-500/60 bg-purple-50 rounded-lg px-3 py-2 mb-3">{session.agenda}</p>
           )}
 
           <div className="flex items-center gap-2 flex-wrap border-t border-purple-50 pt-3">
-            {/* Join meeting button for confirmed upcoming sessions */}
             {session.status === 'confirmed' && isUpcoming && session.meeting_url && (
               <a href={session.meeting_url} target="_blank" rel="noopener noreferrer"
                 className="text-xs font-semibold bg-gradient-brand text-white px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity flex items-center gap-1">
@@ -152,8 +194,6 @@ function SessionCard({ session, currentUserId, onAction }: {
                 Join Jitsi call
               </a>
             )}
-
-            {/* Mentor actions */}
             {isMentor && session.status === 'pending' && (
               <>
                 <button onClick={() => onAction(session.id, 'confirm')}
@@ -168,26 +208,24 @@ function SessionCard({ session, currentUserId, onAction }: {
             )}
             {isMentor && session.status === 'confirmed' && !isUpcoming && (
               <button onClick={() => onAction(session.id, 'complete')}
-                className="text-xs font-semibold bg-purple-50 text-purple-DEFAULT px-3 py-1.5 rounded-lg hover:bg-purple-100 transition-colors">
+                className="text-xs font-semibold bg-purple-50 text-purple-500 px-3 py-1.5 rounded-lg hover:bg-purple-100 transition-colors">
                 Mark complete
               </button>
             )}
             {session.status !== 'pending' && session.status !== 'completed' && (
               <button onClick={() => onAction(session.id, 'cancel')}
-                className="text-xs text-navy-DEFAULT/40 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors">
-                Cancel
+                className="text-xs font-medium text-navy-500/60 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                Cancel session
               </button>
             )}
-
-            {/* Feedback */}
             {session.status === 'completed' && !alreadyFeedback && (
               <button onClick={() => setShowFeedback(true)}
-                className="text-xs font-semibold text-pink-DEFAULT hover:underline ml-auto">
+                className="text-xs font-semibold text-pink-500 hover:underline ml-auto">
                 Leave feedback
               </button>
             )}
             {session.status === 'completed' && alreadyFeedback && (
-              <span className="text-xs text-navy-DEFAULT/30 ml-auto flex items-center gap-1">
+              <span className="text-xs text-navy-500/30 ml-auto flex items-center gap-1">
                 <svg className="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                 </svg>
@@ -204,14 +242,53 @@ function SessionCard({ session, currentUserId, onAction }: {
 // ── Availability manager (mentor) ─────────────────────────────────────────────
 function AvailabilityManager({ userId }: { userId: number }) {
   const queryClient = useQueryClient();
+  const [mode, setMode] = useState<'weekly' | 'oneoff'>('weekly');
+
+  // Weekly schedule state
+  const [selectedDays, setSelectedDays] = useState<Set<number>>(new Set());
+  const [scheduleStart, setScheduleStart] = useState('09:00');
+  const [scheduleEnd, setScheduleEnd]     = useState('10:00');
+  const [weeksAhead, setWeeksAhead]       = useState(4);
+  const [scheduleNotes, setScheduleNotes] = useState('');
+  const [generating, setGenerating]       = useState(false);
+  const [genError, setGenError]           = useState('');
+
+  // One-off state
   const [startTime, setStartTime] = useState('');
-  const [endTime, setEndTime] = useState('');
-  const [notes, setNotes] = useState('');
+  const [endTime, setEndTime]     = useState('');
+  const [notes, setNotes]         = useState('');
 
   const { data } = useQuery<PaginatedResponse<AvailabilitySlot>>({
     queryKey: ['slots', 'mine'],
-    queryFn: () => api.get(`/sessions/slots/?mentor=${userId}`).then(r => r.data),
+    queryFn: () => api.get(`/sessions/slots/?mentor=${userId}&ordering=start_time&page_size=200`).then(r => r.data),
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
+
+  const toggleDay = (d: number) =>
+    setSelectedDays(prev => {
+      const next = new Set(prev);
+      next.has(d) ? next.delete(d) : next.add(d);
+      return next;
+    });
+
+  const generateWeekly = async () => {
+    setGenError('');
+    if (!selectedDays.size) return;
+    setGenerating(true);
+    try {
+      const slots = buildWeeklySlots([...selectedDays], scheduleStart, scheduleEnd, weeksAhead);
+      if (!slots.length) { setGenError('No future slots to create for those settings.'); return; }
+      await Promise.all(slots.map(s =>
+        api.post('/sessions/slots/', { start_time: s.start_time, end_time: s.end_time, notes: scheduleNotes })
+      ));
+      queryClient.invalidateQueries({ queryKey: ['slots', 'mine'] });
+    } catch {
+      setGenError('Something went wrong creating slots.');
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const addSlot = useMutation({
     mutationFn: () => api.post('/sessions/slots/', { start_time: startTime, end_time: endTime, notes }),
@@ -226,63 +303,240 @@ function AvailabilityManager({ userId }: { userId: number }) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['slots', 'mine'] }),
   });
 
-  return (
-    <div className="space-y-4">
-      {/* Add slot form */}
-      <div className="bg-white rounded-2xl shadow-card p-5">
-        <h3 className="text-sm font-bold text-navy-DEFAULT mb-3">Add availability slot</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="text-[10px] font-semibold text-navy-DEFAULT/40 uppercase tracking-wider block mb-1">Start</label>
-            <input type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)}
-              className="w-full border border-purple-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-DEFAULT/30" />
-          </div>
-          <div>
-            <label className="text-[10px] font-semibold text-navy-DEFAULT/40 uppercase tracking-wider block mb-1">End</label>
-            <input type="datetime-local" value={endTime} onChange={e => setEndTime(e.target.value)}
-              className="w-full border border-purple-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-DEFAULT/30" />
-          </div>
-          <div className="sm:col-span-2">
-            <input placeholder="Optional note for scholars (e.g. video or phone)" value={notes} onChange={e => setNotes(e.target.value)}
-              className="w-full border border-purple-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-DEFAULT/30" />
-          </div>
-        </div>
-        <div className="flex justify-end mt-3">
-          <button onClick={() => addSlot.mutate()} disabled={!startTime || !endTime || addSlot.isPending}
-            className="text-xs font-semibold bg-pink-DEFAULT text-white px-4 py-1.5 rounded-lg hover:bg-pink-600 disabled:opacity-50 transition-colors">
-            {addSlot.isPending ? 'Adding…' : '+ Add slot'}
-          </button>
-        </div>
-      </div>
+  const blockOutDate = async (dateKey: string, daySlots: AvailabilitySlot[]) => {
+    const unbooked = daySlots.filter(s => !s.is_booked);
+    if (!unbooked.length) return;
+    await Promise.all(unbooked.map(s => api.delete(`/sessions/slots/${s.id}/`)));
+    queryClient.invalidateQueries({ queryKey: ['slots', 'mine'] });
+  };
 
-      {/* Existing slots */}
-      {data?.results?.length ? (
-        <div className="space-y-2">
-          {data.results.map(slot => (
-            <div key={slot.id} className="bg-white rounded-xl shadow-card p-4 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-navy-DEFAULT">{fmtDate(slot.start_time)}</p>
-                <p className="text-xs text-navy-DEFAULT/50">{fmtTime(slot.start_time)} – {fmtTime(slot.end_time)}</p>
-                {slot.notes && <p className="text-xs text-navy-DEFAULT/40 mt-0.5">{slot.notes}</p>}
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${slot.is_booked ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
-                  {slot.is_booked ? 'Booked' : 'Open'}
-                </span>
-                {!slot.is_booked && (
-                  <button onClick={() => deleteSlot.mutate(slot.id)} className="text-navy-DEFAULT/30 hover:text-red-500 transition-colors">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            </div>
+  const allSlots = data?.results ?? [];
+  const nowTs = Date.now();
+  // Separate future and past-but-unbooked (expired) slots
+  const activeSlots  = allSlots.filter(s => s.is_booked || new Date(s.start_time).getTime() > nowTs);
+  const expiredSlots = allSlots.filter(s => !s.is_booked && new Date(s.start_time).getTime() <= nowTs);
+
+  const grouped  = groupBy(activeSlots, s => localDateKey(s.start_time));
+  const sortedDates = Object.keys(grouped).sort();
+
+  const previewCount = selectedDays.size
+    ? buildWeeklySlots([...selectedDays], scheduleStart, scheduleEnd, weeksAhead).length
+    : 0;
+
+  const inputCls = 'w-full border border-purple-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors';
+
+  return (
+    <div className="space-y-6">
+
+      {/* ── Add availability ── */}
+      <div className="bg-white rounded-2xl shadow-card p-5">
+
+        {/* Mode toggle */}
+        <div className="flex gap-1 p-1 bg-purple-50 rounded-xl mb-5">
+          {(['weekly', 'oneoff'] as const).map(k => (
+            <button key={k} onClick={() => setMode(k)}
+              className={`flex-1 text-xs font-semibold py-2 px-3 rounded-lg transition-all ${mode === k ? 'bg-white text-navy-500 shadow-sm' : 'text-navy-500/50 hover:text-navy-500'}`}>
+              {k === 'weekly' ? 'Weekly schedule' : 'One-off slot'}
+            </button>
           ))}
         </div>
-      ) : (
-        <p className="text-sm text-navy-DEFAULT/40 text-center py-6">No availability slots yet.</p>
-      )}
+
+        {mode === 'weekly' ? (
+          <div className="space-y-4">
+            {/* Day picker */}
+            <div>
+              <label className="text-[10px] font-semibold text-navy-500/40 uppercase tracking-wider block mb-2">Days available</label>
+              <div className="flex gap-2 flex-wrap">
+                {DAYS.map((day, i) => (
+                  <button key={day} onClick={() => toggleDay(i)}
+                    className={`w-11 h-11 rounded-xl text-xs font-bold transition-all ${
+                      selectedDays.has(i)
+                        ? 'bg-pink-500 text-white shadow-brand'
+                        : 'bg-purple-50 text-navy-500/60 hover:bg-purple-100'
+                    }`}>
+                    {day}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Time range */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-semibold text-navy-500/40 uppercase tracking-wider block mb-1">From</label>
+                <input type="time" value={scheduleStart} onChange={e => setScheduleStart(e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-navy-500/40 uppercase tracking-wider block mb-1">To</label>
+                <input type="time" value={scheduleEnd} onChange={e => setScheduleEnd(e.target.value)} className={inputCls} />
+              </div>
+            </div>
+
+            {/* Weeks ahead selector */}
+            <div>
+              <label className="text-[10px] font-semibold text-navy-500/40 uppercase tracking-wider block mb-2">Apply for next</label>
+              <div className="flex gap-2">
+                {[2, 4, 6, 8].map(w => (
+                  <button key={w} onClick={() => setWeeksAhead(w)}
+                    className={`flex-1 text-xs font-semibold py-2 rounded-lg border transition-all ${
+                      weeksAhead === w
+                        ? 'bg-pink-500 text-white border-pink-500'
+                        : 'border-purple-200 text-navy-500/60 hover:border-purple-400'
+                    }`}>
+                    {w} weeks
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Notes */}
+            <input placeholder="Note for scholars e.g. 'video call preferred' (optional)"
+              value={scheduleNotes} onChange={e => setScheduleNotes(e.target.value)} className={inputCls} />
+
+            {genError && <p className="text-xs text-red-500">{genError}</p>}
+
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-xs text-navy-500/40">
+                {previewCount > 0
+                  ? `Creates ${previewCount} slot${previewCount !== 1 ? 's' : ''}`
+                  : 'Select days above'}
+              </span>
+              <button
+                onClick={generateWeekly}
+                disabled={!selectedDays.size || !scheduleStart || !scheduleEnd || generating || scheduleStart >= scheduleEnd}
+                className="text-sm font-semibold bg-pink-500 text-white px-5 py-2 rounded-lg hover:bg-pink-600 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors">
+                {generating ? 'Generating…' : 'Generate slots'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* One-off slot form */
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-semibold text-navy-500/40 uppercase tracking-wider block mb-1">Start</label>
+                <input type="datetime-local" value={startTime} min={toLocalDT(new Date())} onChange={e => setStartTime(e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-navy-500/40 uppercase tracking-wider block mb-1">End</label>
+                <input type="datetime-local" value={endTime} min={startTime || toLocalDT(new Date())} onChange={e => setEndTime(e.target.value)} className={inputCls} />
+              </div>
+            </div>
+            <input placeholder="Note for scholars (optional)" value={notes} onChange={e => setNotes(e.target.value)} className={inputCls} />
+            <div className="flex justify-end">
+              <button onClick={() => addSlot.mutate()} disabled={!startTime || !endTime || addSlot.isPending}
+                className="text-sm font-semibold bg-pink-500 text-white px-5 py-2 rounded-lg hover:bg-pink-600 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors">
+                {addSlot.isPending ? 'Adding…' : '+ Add slot'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Upcoming slots grouped by date ── */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <BrandStar />
+          <h3 className="text-sm font-bold text-navy-500 uppercase tracking-widest">
+            Upcoming availability
+            {allSlots.length > 0 && (
+              <span className="ml-2 text-navy-500/40 normal-case font-normal">({allSlots.length} slot{allSlots.length !== 1 ? 's' : ''})</span>
+            )}
+          </h3>
+        </div>
+
+        {/* Expired slot warning */}
+        {expiredSlots.length > 0 && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 mb-4 flex items-start gap-3">
+            <svg className="w-4 h-4 text-yellow-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+            <div className="flex-1">
+              <p className="text-xs font-semibold text-yellow-800">
+                {expiredSlots.length} expired slot{expiredSlots.length !== 1 ? 's' : ''} — scholars cannot see these
+              </p>
+              <p className="text-xs text-yellow-700/70 mt-0.5">These slots are in the past. Please create new ones with future dates.</p>
+            </div>
+            <button
+              onClick={async () => {
+                await Promise.all(expiredSlots.map(s => api.delete(`/sessions/slots/${s.id}/`)));
+                queryClient.invalidateQueries({ queryKey: ['slots', 'mine'] });
+              }}
+              className="text-[10px] font-semibold text-yellow-700 hover:text-yellow-900 border border-yellow-300 hover:border-yellow-500 px-2 py-1 rounded-lg transition-colors whitespace-nowrap flex-shrink-0">
+              Remove all
+            </button>
+          </div>
+        )}
+
+        {!sortedDates.length ? (
+          <div className="bg-white rounded-2xl shadow-card text-center py-12">
+            <p className="text-sm text-navy-500/40">No slots set yet.</p>
+            <p className="text-xs text-navy-500/30 mt-1">Use the weekly schedule above to get started.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {sortedDates.map(dateKey => {
+              const daySlots  = grouped[dateKey];
+              const hasUnbooked = daySlots.some(s => !s.is_booked);
+              // Parse as local date (append time to avoid UTC shift)
+              const dateLabel = new Date(dateKey + 'T00:00:00').toLocaleDateString('en-GB', {
+                weekday: 'long', day: 'numeric', month: 'short', year: 'numeric',
+              });
+              const bookedCount = daySlots.filter(s => s.is_booked).length;
+              return (
+                <div key={dateKey} className="bg-white rounded-2xl shadow-card overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-purple-50">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-bold text-navy-500">{dateLabel}</p>
+                      {bookedCount > 0 && (
+                        <span className="text-[10px] font-semibold bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">
+                          {bookedCount} booked
+                        </span>
+                      )}
+                    </div>
+                    {hasUnbooked && (
+                      <button
+                        onClick={() => blockOutDate(dateKey, daySlots)}
+                        className="text-[10px] font-semibold text-red-400 hover:text-red-500 border border-red-200 hover:border-red-400 px-2 py-1 rounded-lg transition-colors whitespace-nowrap">
+                        Block out day
+                      </button>
+                    )}
+                  </div>
+                  <div className="divide-y divide-purple-50">
+                    {daySlots.map(slot => (
+                      <div key={slot.id} className="flex items-center justify-between px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-semibold text-navy-500 tabular-nums">
+                            {fmtTime(slot.start_time)} – {fmtTime(slot.end_time)}
+                          </span>
+                          {slot.notes && (
+                            <span className="text-xs text-navy-500/40 hidden sm:inline">{slot.notes}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${slot.is_booked ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                            {slot.is_booked ? 'Booked' : 'Open'}
+                          </span>
+                          {!slot.is_booked && (
+                            <button
+                              onClick={() => deleteSlot.mutate(slot.id)}
+                              title="Remove slot"
+                              className="text-navy-500/25 hover:text-red-500 transition-colors">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -297,7 +551,9 @@ function BookingPanel({ currentUserId }: { currentUserId: number }) {
 
   const { data: slots, isLoading } = useQuery<PaginatedResponse<AvailabilitySlot>>({
     queryKey: ['slots', 'available'],
-    queryFn: () => api.get('/sessions/slots/?is_booked=false').then(r => r.data),
+    queryFn: () => api.get('/sessions/slots/').then(r => r.data),
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   const book = useMutation({
@@ -325,31 +581,36 @@ function BookingPanel({ currentUserId }: { currentUserId: number }) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <h3 className="font-bold text-navy-DEFAULT mb-1">Request sent!</h3>
-        <p className="text-xs text-navy-DEFAULT/50">Your mentor will confirm shortly.</p>
+        <h3 className="font-bold text-navy-500 mb-1">Request sent!</h3>
+        <p className="text-xs text-navy-500/50">Your mentor will confirm shortly.</p>
         <button onClick={() => { setBooked(false); setSelectedSlot(null); }}
-          className="mt-4 text-xs font-semibold text-pink-DEFAULT hover:underline">Book another</button>
+          className="mt-4 text-xs font-semibold text-pink-500 hover:underline">Book another</button>
       </div>
     );
   }
 
-  if (isLoading) return <div className="flex justify-center py-8"><div className="w-7 h-7 border-2 border-purple-DEFAULT/30 border-t-pink-DEFAULT rounded-full animate-spin" /></div>;
+  if (isLoading) return <div className="flex justify-center py-8"><div className="w-7 h-7 border-2 border-purple-500/30 border-t-pink-500 rounded-full animate-spin" /></div>;
+
+  const availableSlots = slots?.results?.filter(s => !s.is_booked) ?? [];
 
   return (
     <div className="space-y-4">
       {!selectedSlot ? (
         <>
-          <p className="text-xs text-navy-DEFAULT/50 mb-3">Select an available time slot from your mentor(s):</p>
-          {!slots?.results?.length ? (
-            <p className="text-sm text-navy-DEFAULT/40 text-center py-8">No available slots right now. Your mentor will add times when they're free.</p>
+          <p className="text-xs text-navy-500/50 mb-3">Select an available time slot from your mentor(s):</p>
+          {!availableSlots.length ? (
+            <div className="bg-white rounded-2xl shadow-card text-center py-12">
+              <p className="text-sm text-navy-500/40">No available slots right now.</p>
+              <p className="text-xs text-navy-500/30 mt-1">Your mentor will add times when they're free — check back soon.</p>
+            </div>
           ) : (
             <div className="space-y-2">
-              {slots.results.map(slot => (
+              {availableSlots.map(slot => (
                 <button key={slot.id} onClick={() => setSelectedSlot(slot)}
                   className="w-full text-left bg-white rounded-xl shadow-card hover:shadow-brand transition-all p-4">
-                  <p className="text-sm font-semibold text-navy-DEFAULT">{slot.mentor_name}</p>
-                  <p className="text-xs text-navy-DEFAULT/50">{fmtDateTime(slot.start_time)} – {fmtTime(slot.end_time)}</p>
-                  {slot.notes && <p className="text-xs text-navy-DEFAULT/40 mt-0.5">{slot.notes}</p>}
+                  <p className="text-sm font-semibold text-navy-500">{slot.mentor_name}</p>
+                  <p className="text-xs text-navy-500/50">{fmtDateTime(slot.start_time)} – {fmtTime(slot.end_time)}</p>
+                  {slot.notes && <p className="text-xs text-navy-500/40 mt-0.5">{slot.notes}</p>}
                 </button>
               ))}
             </div>
@@ -357,29 +618,27 @@ function BookingPanel({ currentUserId }: { currentUserId: number }) {
         </>
       ) : (
         <div className="bg-white rounded-2xl shadow-card p-5 space-y-4">
-          <div className="flex items-center gap-2 mb-1">
-            <button onClick={() => setSelectedSlot(null)} className="text-xs text-pink-DEFAULT hover:underline flex items-center gap-1">
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
-              Back
-            </button>
-          </div>
+          <button onClick={() => setSelectedSlot(null)} className="text-xs text-pink-500 hover:underline flex items-center gap-1">
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
+            Back
+          </button>
           <div className="bg-purple-50 rounded-xl p-3 text-xs">
-            <p className="font-semibold text-navy-DEFAULT">{selectedSlot.mentor_name}</p>
-            <p className="text-navy-DEFAULT/60">{fmtDateTime(selectedSlot.start_time)} – {fmtTime(selectedSlot.end_time)}</p>
+            <p className="font-semibold text-navy-500">{selectedSlot.mentor_name}</p>
+            <p className="text-navy-500/60">{fmtDateTime(selectedSlot.start_time)} – {fmtTime(selectedSlot.end_time)}</p>
           </div>
           <div>
-            <label className="text-[10px] font-semibold text-navy-DEFAULT/40 uppercase tracking-wider block mb-1">Session title</label>
+            <label className="text-[10px] font-semibold text-navy-500/40 uppercase tracking-wider block mb-1">Session title</label>
             <input value={title} onChange={e => setTitle(e.target.value)}
-              className="w-full border border-purple-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-DEFAULT/30" />
+              className="w-full border border-purple-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors" />
           </div>
           <div>
-            <label className="text-[10px] font-semibold text-navy-DEFAULT/40 uppercase tracking-wider block mb-1">Agenda / topics to discuss</label>
+            <label className="text-[10px] font-semibold text-navy-500/40 uppercase tracking-wider block mb-1">Agenda / topics to discuss</label>
             <textarea rows={3} value={agenda} onChange={e => setAgenda(e.target.value)}
-              className="w-full border border-purple-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-DEFAULT/30 resize-none"
+              className="w-full border border-purple-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors resize-none"
               placeholder="What would you like to discuss?" />
           </div>
           <button onClick={() => book.mutate()} disabled={!title || book.isPending}
-            className="w-full text-sm font-semibold bg-pink-DEFAULT text-white py-2.5 rounded-xl hover:bg-pink-600 disabled:opacity-50 transition-colors shadow-brand">
+            className="w-full text-sm font-semibold bg-pink-500 text-white py-2.5 rounded-xl hover:bg-pink-600 disabled:opacity-50 transition-colors shadow-brand">
             {book.isPending ? 'Sending request…' : 'Request this session'}
           </button>
         </div>
@@ -397,6 +656,8 @@ export default function SessionsPage() {
   const { data: sessions, isLoading } = useQuery<PaginatedResponse<MentoringSession>>({
     queryKey: ['sessions'],
     queryFn: () => api.get('/sessions/sessions/').then(r => r.data),
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   const sessionAction = useMutation({
@@ -407,14 +668,14 @@ export default function SessionsPage() {
 
   const now = new Date();
   const upcoming = sessions?.results?.filter(s => new Date(s.start_time) >= now && s.status !== 'cancelled') ?? [];
-  const past = sessions?.results?.filter(s => new Date(s.start_time) < now || s.status === 'completed' || s.status === 'cancelled') ?? [];
+  const past     = sessions?.results?.filter(s => new Date(s.start_time) < now || s.status === 'completed' || s.status === 'cancelled') ?? [];
 
   const isMentor = user?.role === 'mentor';
   const tabs = [
-    { key: 'upcoming', label: `Upcoming (${upcoming.length})` },
-    { key: 'past', label: 'Past sessions' },
-    ...(isMentor ? [{ key: 'availability', label: 'My Availability' }] : []),
-    ...(!isMentor ? [{ key: 'book', label: '+ Book a session' }] : []),
+    { key: 'upcoming',     label: `Upcoming (${upcoming.length})` },
+    { key: 'past',         label: 'Past sessions' },
+    ...(isMentor  ? [{ key: 'availability', label: 'My Availability' }] : []),
+    ...(!isMentor ? [{ key: 'book',         label: '+ Book a session' }] : []),
   ] as { key: typeof tab; label: string }[];
 
   return (
@@ -435,23 +696,23 @@ export default function SessionsPage() {
       <div className="flex gap-1 bg-white rounded-xl shadow-card p-1 mb-6 overflow-x-auto">
         {tabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={`flex-1 min-w-max text-xs font-semibold px-4 py-2 rounded-lg transition-all whitespace-nowrap ${tab === t.key ? 'bg-gradient-brand text-white shadow-brand' : 'text-navy-DEFAULT/60 hover:text-navy-DEFAULT'}`}>
+            className={`flex-1 min-w-max text-xs font-semibold px-4 py-2 rounded-lg transition-all whitespace-nowrap ${tab === t.key ? 'bg-gradient-brand text-white shadow-brand' : 'text-navy-500/60 hover:text-navy-500'}`}>
             {t.label}
           </button>
         ))}
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-purple-DEFAULT/30 border-t-pink-DEFAULT rounded-full animate-spin" /></div>
+        <div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-purple-500/30 border-t-pink-500 rounded-full animate-spin" /></div>
       ) : (
         <>
           {tab === 'upcoming' && (
             <>
-              <div className="flex items-center gap-2 mb-4"><BrandStar /><h2 className="text-sm font-bold text-navy-DEFAULT uppercase tracking-widest">Upcoming Sessions</h2></div>
+              <div className="flex items-center gap-2 mb-4"><BrandStar /><h2 className="text-sm font-bold text-navy-500 uppercase tracking-widest">Upcoming Sessions</h2></div>
               {!upcoming.length ? (
-                <div className="text-center py-16 text-sm text-navy-DEFAULT/40">
+                <div className="text-center py-16 text-sm text-navy-500/40">
                   No upcoming sessions.
-                  {!isMentor && <> <button onClick={() => setTab('book')} className="text-pink-DEFAULT font-semibold hover:underline ml-1">Book one now.</button></>}
+                  {!isMentor && <><button onClick={() => setTab('book')} className="text-pink-500 font-semibold hover:underline ml-1">Book one now.</button></>}
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -464,9 +725,9 @@ export default function SessionsPage() {
 
           {tab === 'past' && (
             <>
-              <div className="flex items-center gap-2 mb-4"><BrandStar /><h2 className="text-sm font-bold text-navy-DEFAULT uppercase tracking-widest">Past Sessions</h2></div>
+              <div className="flex items-center gap-2 mb-4"><BrandStar /><h2 className="text-sm font-bold text-navy-500 uppercase tracking-widest">Past Sessions</h2></div>
               {!past.length ? (
-                <p className="text-center py-16 text-sm text-navy-DEFAULT/40">No past sessions yet.</p>
+                <p className="text-center py-16 text-sm text-navy-500/40">No past sessions yet.</p>
               ) : (
                 <div className="space-y-3">
                   {past.map(s => <SessionCard key={s.id} session={s} currentUserId={user!.id}
@@ -478,14 +739,14 @@ export default function SessionsPage() {
 
           {tab === 'availability' && isMentor && user && (
             <>
-              <div className="flex items-center gap-2 mb-4"><BrandStar /><h2 className="text-sm font-bold text-navy-DEFAULT uppercase tracking-widest">My Availability</h2></div>
+              <div className="flex items-center gap-2 mb-4"><BrandStar /><h2 className="text-sm font-bold text-navy-500 uppercase tracking-widest">My Availability</h2></div>
               <AvailabilityManager userId={user.id} />
             </>
           )}
 
           {tab === 'book' && !isMentor && user && (
             <>
-              <div className="flex items-center gap-2 mb-4"><BrandStar /><h2 className="text-sm font-bold text-navy-DEFAULT uppercase tracking-widest">Book a Session</h2></div>
+              <div className="flex items-center gap-2 mb-4"><BrandStar /><h2 className="text-sm font-bold text-navy-500 uppercase tracking-widest">Book a Session</h2></div>
               <BookingPanel currentUserId={user.id} />
             </>
           )}

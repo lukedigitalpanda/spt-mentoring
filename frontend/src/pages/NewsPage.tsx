@@ -16,7 +16,7 @@ function BrandStar({ size = 16 }: { size?: number }) {
 const audienceBadge: Record<string, string> = {
   all:     'bg-green-100 text-green-700',
   scholar: 'bg-purple-100 text-purple-700',
-  mentor:  'bg-navy-100 text-navy-DEFAULT',
+  mentor:  'bg-navy-100 text-navy-500',
   sponsor: 'bg-orange-100 text-orange-700',
 };
 
@@ -47,7 +47,7 @@ function FeaturedCard({ item }: { item: NewsItem }) {
             <span className="text-xs text-white/40">{fmt(item.published_at)}</span>
             {item.author_name && <span className="text-xs text-white/40">by {item.author_name}</span>}
           </div>
-          <span className="mt-5 inline-flex items-center gap-2 bg-pink-DEFAULT text-white text-xs font-bold px-4 py-2 rounded-lg group-hover:bg-pink-600 transition-colors">
+          <span className="mt-5 inline-flex items-center gap-2 bg-pink-500 text-white text-xs font-bold px-4 py-2 rounded-lg group-hover:bg-pink-600 transition-colors">
             Read article
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
@@ -80,15 +80,15 @@ function NewsCard({ item }: { item: NewsItem }) {
             {item.audience}
           </span>
         </div>
-        <h3 className="font-bold text-sm text-navy-DEFAULT group-hover:text-pink-DEFAULT transition-colors leading-snug line-clamp-2 flex-1">
+        <h3 className="font-bold text-sm text-navy-500 group-hover:text-pink-500 transition-colors leading-snug line-clamp-2 flex-1">
           {item.title}
         </h3>
         {item.summary && (
-          <p className="text-xs text-navy-DEFAULT/50 mt-2 line-clamp-3">{item.summary}</p>
+          <p className="text-xs text-navy-500/50 mt-2 line-clamp-3">{item.summary}</p>
         )}
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-purple-50">
-          <span className="text-xs text-navy-DEFAULT/30">{fmt(item.published_at)}</span>
-          <span className="text-xs font-semibold text-pink-DEFAULT flex items-center gap-1">
+          <span className="text-xs text-navy-500/30">{fmt(item.published_at)}</span>
+          <span className="text-xs font-semibold text-pink-500 flex items-center gap-1">
             Read
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
@@ -121,25 +121,25 @@ export default function NewsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold text-navy-DEFAULT/40 uppercase tracking-widest mb-0.5">Latest from the programme</p>
-          <h1 className="text-2xl font-extrabold text-navy-DEFAULT">News</h1>
+          <p className="text-xs font-semibold text-navy-500/40 uppercase tracking-widest mb-0.5">Latest from the programme</p>
+          <h1 className="text-2xl font-extrabold text-navy-500">News</h1>
         </div>
 
         {/* Filters */}
         <div className="flex gap-2 flex-wrap">
           <div className="relative">
-            <svg className="w-3.5 h-3.5 text-navy-DEFAULT/30 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5 text-navy-500/30 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
-              className="pl-8 pr-3 py-1.5 text-sm border border-purple-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-DEFAULT/30 w-44"
+              className="pl-8 pr-3 py-1.5 text-sm border border-purple-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/30 w-44"
               placeholder="Search…"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
           </div>
           <select
-            className="text-sm border border-purple-100 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-DEFAULT/30 text-navy-DEFAULT"
+            className="text-sm border border-purple-100 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-500/30 text-navy-500"
             value={audience}
             onChange={e => setAudience(e.target.value)}
           >
@@ -154,10 +154,10 @@ export default function NewsPage() {
 
       {isLoading ? (
         <div className="flex justify-center py-16">
-          <div className="w-8 h-8 border-2 border-purple-DEFAULT/30 border-t-pink-DEFAULT rounded-full animate-spin" />
+          <div className="w-8 h-8 border-2 border-purple-500/30 border-t-pink-500 rounded-full animate-spin" />
         </div>
       ) : !data?.results?.length ? (
-        <div className="text-center py-16 text-sm text-navy-DEFAULT/40">No articles found.</div>
+        <div className="text-center py-16 text-sm text-navy-500/40">No articles found.</div>
       ) : (
         <>
           {featured && <FeaturedCard item={featured} />}
@@ -166,7 +166,7 @@ export default function NewsPage() {
             <>
               <div className="flex items-center gap-2 mb-4">
                 <BrandStar />
-                <h2 className="text-sm font-bold text-navy-DEFAULT uppercase tracking-widest">All Articles</h2>
+                <h2 className="text-sm font-bold text-navy-500 uppercase tracking-widest">All Articles</h2>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {rest.map(item => <NewsCard key={item.id} item={item} />)}

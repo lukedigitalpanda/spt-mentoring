@@ -1,0 +1,53 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block title %}{% trans 'Site administration' %} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block content %}
+<div id="content-main">
+
+  {% if app_list %}
+  <div class="dashboard-grid">
+    {% for app in app_list %}
+    <div class="app-card">
+      <div class="app-card-header">
+        <a href="{{ app.app_url }}" class="app-card-title">{{ app.name }}</a>
+      </div>
+      <div class="app-card-body">
+        {% for model in app.models %}
+        <div class="model-row">
+          <span class="model-name">
+            {% if model.admin_url %}
+              <a href="{{ model.admin_url }}">{{ model.name }}</a>
+            {% else %}
+              {{ model.name }}
+            {% endif %}
+          </span>
+          <span class="model-actions">
+            {% if model.admin_url %}
+              <a href="{{ model.admin_url }}" class="model-action-btn view-btn" title="View">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="13" height="13" fill="currentColor"><path d="M8 3C4.5 3 1.5 5.5 0 8c1.5 2.5 4.5 5 8 5s6.5-2.5 8-5c-1.5-2.5-4.5-5-8-5zm0 8a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>
+                View
+              </a>
+            {% endif %}
+            {% if model.add_url %}
+              <a href="{{ model.add_url }}" class="model-action-btn add-btn" title="Add">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="13" height="13" fill="currentColor"><path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2z"/></svg>
+                Add
+              </a>
+            {% endif %}
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p>{% trans "You don't have permission to view or edit anything." %}</p>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block sidebar %}{% endblock %}

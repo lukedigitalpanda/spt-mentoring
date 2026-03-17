@@ -35,7 +35,7 @@ function ProgressBar({ value }: { value: number }) {
       <div className="flex-1 bg-purple-50 rounded-full h-1.5">
         <div className="bg-gradient-brand-soft h-1.5 rounded-full transition-all" style={{ width: `${value}%` }} />
       </div>
-      <span className="text-[10px] font-semibold text-navy-DEFAULT/50 w-8 text-right">{value}%</span>
+      <span className="text-[10px] font-semibold text-navy-500/50 w-8 text-right">{value}%</span>
     </div>
   );
 }
@@ -48,22 +48,22 @@ function MilestoneItem({ milestone, onToggle, onDelete }: {
 }) {
   return (
     <div className="flex items-center gap-2.5 group py-1">
-      <button onClick={onToggle} className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all ${milestone.is_completed ? 'bg-pink-DEFAULT border-pink-DEFAULT' : 'border-purple-200 hover:border-pink-DEFAULT'}`}>
+      <button onClick={onToggle} className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all ${milestone.is_completed ? 'bg-pink-500 border-pink-500' : 'border-purple-200 hover:border-pink-500'}`}>
         {milestone.is_completed && (
           <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
           </svg>
         )}
       </button>
-      <span className={`text-xs flex-1 ${milestone.is_completed ? 'line-through text-navy-DEFAULT/30' : 'text-navy-DEFAULT/70'}`}>
+      <span className={`text-xs flex-1 ${milestone.is_completed ? 'line-through text-navy-500/30' : 'text-navy-500/70'}`}>
         {milestone.title}
       </span>
       {milestone.due_date && (
-        <span className="text-[10px] text-navy-DEFAULT/30 flex-shrink-0">
+        <span className="text-[10px] text-navy-500/30 flex-shrink-0">
           {new Date(milestone.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
         </span>
       )}
-      <button onClick={onDelete} className="opacity-0 group-hover:opacity-100 text-navy-DEFAULT/20 hover:text-red-400 transition-all">
+      <button onClick={onDelete} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-all">
         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -108,7 +108,7 @@ function GoalCard({ goal }: { goal: Goal }) {
   });
 
   return (
-    <div className={`bg-white rounded-2xl shadow-card transition-all ${expanded ? 'ring-1 ring-purple-DEFAULT/20' : ''}`}>
+    <div className={`bg-white rounded-2xl shadow-card transition-all ${expanded ? 'ring-1 ring-purple-500/20' : ''}`}>
       <div className="p-5">
         <div className="flex items-start justify-between gap-3 mb-2">
           <div className="flex-1 min-w-0">
@@ -116,13 +116,13 @@ function GoalCard({ goal }: { goal: Goal }) {
               <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize ${categoryColour[goal.category]}`}>{goal.category}</span>
               <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize ${statusColour[goal.status]}`}>{goal.status}</span>
               {goal.due_date && (
-                <span className="text-[10px] text-navy-DEFAULT/40">
+                <span className="text-[10px] text-navy-500/40">
                   Due {new Date(goal.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                 </span>
               )}
             </div>
-            <h3 className="font-bold text-sm text-navy-DEFAULT">{goal.title}</h3>
-            {goal.description && <p className="text-xs text-navy-DEFAULT/50 mt-0.5 line-clamp-2">{goal.description}</p>}
+            <h3 className="font-bold text-sm text-navy-500">{goal.title}</h3>
+            {goal.description && <p className="text-xs text-navy-500/50 mt-0.5 line-clamp-2">{goal.description}</p>}
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
             {goal.status !== 'completed' && (
@@ -132,7 +132,7 @@ function GoalCard({ goal }: { goal: Goal }) {
               </button>
             )}
             <button onClick={() => deleteGoal.mutate()}
-              className="text-navy-DEFAULT/20 hover:text-red-400 transition-colors p-1">
+              className="text-navy-500/40 hover:text-red-500 transition-colors p-1">
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
@@ -144,13 +144,13 @@ function GoalCard({ goal }: { goal: Goal }) {
         <ProgressBar value={goal.progress_percent} />
 
         {goal.milestone_count > 0 && (
-          <p className="text-[10px] text-navy-DEFAULT/40 mt-1">
+          <p className="text-[10px] text-navy-500/40 mt-1">
             {goal.completed_milestone_count} / {goal.milestone_count} milestones complete
           </p>
         )}
 
         <button onClick={() => setExpanded(v => !v)}
-          className="text-xs font-semibold text-pink-DEFAULT hover:underline mt-3 flex items-center gap-1">
+          className="text-xs font-semibold text-pink-500 hover:underline mt-3 flex items-center gap-1">
           {expanded ? 'Hide' : 'Milestones'}
           <svg className={`w-3 h-3 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
@@ -175,13 +175,13 @@ function GoalCard({ goal }: { goal: Goal }) {
               value={newMilestone}
               onChange={e => setNewMilestone(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && newMilestone.trim() && addMilestone.mutate()}
-              className="flex-1 border border-purple-100 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-purple-DEFAULT/30"
+              className="flex-1 border border-purple-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors"
             />
             <input type="date" value={milestoneDue} onChange={e => setMilestoneDue(e.target.value)}
-              className="border border-purple-100 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-purple-DEFAULT/30 w-32" />
+              className="border border-purple-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors w-32" />
             <button onClick={() => newMilestone.trim() && addMilestone.mutate()}
               disabled={!newMilestone.trim() || addMilestone.isPending}
-              className="text-xs font-semibold bg-pink-DEFAULT text-white px-3 py-1.5 rounded-lg hover:bg-pink-600 disabled:opacity-50 transition-colors">
+              className="text-xs font-semibold bg-pink-500 text-white px-3 py-1.5 rounded-lg hover:bg-pink-600 disabled:opacity-50 transition-colors">
               +
             </button>
           </div>
@@ -206,23 +206,23 @@ function NewGoalForm({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="bg-white rounded-2xl shadow-card p-5 mb-6 space-y-3">
-      <h3 className="text-sm font-bold text-navy-DEFAULT">New Goal</h3>
+      <h3 className="text-sm font-bold text-navy-500">New Goal</h3>
       <input placeholder="Goal title *" value={title} onChange={e => setTitle(e.target.value)}
-        className="w-full border border-purple-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-DEFAULT/30" required />
+        className="w-full border border-purple-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors" required />
       <textarea rows={2} placeholder="Describe this goal…" value={description} onChange={e => setDescription(e.target.value)}
-        className="w-full border border-purple-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-DEFAULT/30 resize-none" />
+        className="w-full border border-purple-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors resize-none" />
       <div className="grid grid-cols-2 gap-3">
         <select value={category} onChange={e => setCategory(e.target.value)}
-          className="border border-purple-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-DEFAULT/30 text-navy-DEFAULT capitalize">
+          className="border border-purple-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors text-navy-500 capitalize">
           {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
-          className="border border-purple-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-DEFAULT/30" />
+          className="border border-purple-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors" />
       </div>
-      <div className="flex gap-2 justify-end">
-        <button onClick={onClose} className="text-xs text-navy-DEFAULT/50 px-3 py-1.5 rounded-lg hover:bg-gray-50">Cancel</button>
+      <div className="flex gap-2 justify-end pt-1">
+        <button onClick={onClose} className="text-sm text-navy-500/60 px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">Cancel</button>
         <button onClick={() => create.mutate()} disabled={!title.trim() || create.isPending}
-          className="text-xs font-semibold bg-pink-DEFAULT text-white px-4 py-1.5 rounded-lg hover:bg-pink-600 disabled:opacity-50 transition-colors">
+          className="text-sm font-semibold bg-pink-500 text-white px-5 py-2 rounded-lg hover:bg-pink-600 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors">
           {create.isPending ? 'Creating…' : 'Create goal'}
         </button>
       </div>
@@ -273,13 +273,13 @@ export default function GoalsPage() {
         <div className="flex gap-1 bg-white rounded-xl shadow-card p-1">
           {['active', 'paused', 'completed', ''].map(s => (
             <button key={s} onClick={() => setFilterStatus(s)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${filterStatus === s ? 'bg-gradient-brand text-white' : 'text-navy-DEFAULT/60 hover:text-navy-DEFAULT'}`}>
+              className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${filterStatus === s ? 'bg-gradient-brand text-white' : 'text-navy-500/60 hover:text-navy-500'}`}>
               {s || 'All'}
             </button>
           ))}
         </div>
         <button onClick={() => setShowNew(v => !v)}
-          className="text-xs font-semibold bg-pink-DEFAULT text-white px-4 py-2 rounded-lg hover:bg-pink-600 transition-colors shadow-brand">
+          className="text-sm font-semibold bg-pink-500 text-white px-5 py-2.5 rounded-xl hover:bg-pink-600 transition-colors shadow-brand">
           + New goal
         </button>
       </div>
@@ -288,17 +288,17 @@ export default function GoalsPage() {
 
       <div className="flex items-center gap-2 mb-4">
         <BrandStar />
-        <h2 className="text-sm font-bold text-navy-DEFAULT uppercase tracking-widest">
+        <h2 className="text-sm font-bold text-navy-500 uppercase tracking-widest">
           {filterStatus ? `${filterStatus.charAt(0).toUpperCase() + filterStatus.slice(1)} Goals` : 'All Goals'}
         </h2>
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-purple-DEFAULT/30 border-t-pink-DEFAULT rounded-full animate-spin" /></div>
+        <div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-purple-500/30 border-t-pink-500 rounded-full animate-spin" /></div>
       ) : !data?.results?.length ? (
-        <div className="text-center py-16 text-sm text-navy-DEFAULT/40">
+        <div className="text-center py-16 text-sm text-navy-500/40">
           {filterStatus === 'active' ? 'No active goals yet.' : 'No goals found.'}
-          <button onClick={() => setShowNew(true)} className="text-pink-DEFAULT font-semibold hover:underline ml-1">Create your first goal.</button>
+          <button onClick={() => setShowNew(true)} className="text-pink-500 font-semibold hover:underline ml-1">Create your first goal.</button>
         </div>
       ) : (
         <div className="space-y-3">

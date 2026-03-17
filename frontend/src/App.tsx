@@ -28,6 +28,12 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function AdminRedirect() {
+  const { user } = useAuth();
+  if (user?.role === 'admin') return <Navigate to="/admin" replace />;
+  return <HomePage />;
+}
+
 function App() {
   const { isAuthenticated, fetchCurrentUser } = useAuth();
 
@@ -46,7 +52,7 @@ function App() {
               <RequireAuth>
                 <Layout>
                   <Routes>
-                    <Route path="/" element={<HomePage />} />
+                    <Route path="/" element={<AdminRedirect />} />
                     <Route path="/messages" element={<MessagesPage />} />
                     <Route path="/admin" element={<AdminPage />} />
                     <Route path="/forums" element={<ForumsPage />} />

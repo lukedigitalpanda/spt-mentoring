@@ -35,11 +35,11 @@ function Field({ label, value, placeholder, editing, onChange, type = 'text', mu
   const display = value != null && value !== '' ? String(value) : '—';
   return (
     <div>
-      <p className="text-[10px] font-semibold text-navy-DEFAULT/40 uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-[10px] font-semibold text-navy-500/40 uppercase tracking-wider mb-1">{label}</p>
       {editing ? (
         multiline ? (
           <textarea
-            className="w-full border border-purple-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-DEFAULT/30 resize-none"
+            className="w-full border border-purple-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors resize-none"
             rows={3}
             placeholder={placeholder}
             value={String(value ?? '')}
@@ -48,14 +48,14 @@ function Field({ label, value, placeholder, editing, onChange, type = 'text', mu
         ) : (
           <input
             type={type}
-            className="w-full border border-purple-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-DEFAULT/30"
+            className="w-full border border-purple-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors"
             placeholder={placeholder}
             value={String(value ?? '')}
             onChange={e => onChange?.(e.target.value)}
           />
         )
       ) : (
-        <p className="text-sm text-navy-DEFAULT">{display}</p>
+        <p className="text-sm text-navy-500">{display}</p>
       )}
     </div>
   );
@@ -69,7 +69,7 @@ function MentorSection({ user, editing, onChange }: { user: User; editing: boole
     <div>
       <div className="flex items-center gap-2 mb-4">
         <BrandStar />
-        <h2 className="text-sm font-bold text-navy-DEFAULT uppercase tracking-widest">Mentor Profile</h2>
+        <h2 className="text-sm font-bold text-navy-500 uppercase tracking-widest">Mentor Profile</h2>
       </div>
       <div className="bg-white rounded-2xl shadow-card p-6 grid grid-cols-1 sm:grid-cols-2 gap-5">
         <Field label="Company" value={mp.company} placeholder="Your employer" editing={editing} onChange={v => onChange('mentor_profile.company', v)} />
@@ -80,11 +80,11 @@ function MentorSection({ user, editing, onChange }: { user: User; editing: boole
           <Field label="Availability notes" value={mp.availability} placeholder="Your general availability" editing={editing} multiline onChange={v => onChange('mentor_profile.availability', v)} />
         </div>
         <div className="sm:col-span-2">
-          <p className="text-[10px] font-semibold text-navy-DEFAULT/40 uppercase tracking-wider mb-1">Specialisms</p>
-          <p className="text-sm text-navy-DEFAULT">{mp.specialisms?.join(', ') || '—'}</p>
+          <p className="text-[10px] font-semibold text-navy-500/40 uppercase tracking-wider mb-1">Specialisms</p>
+          <p className="text-sm text-navy-500">{mp.specialisms?.join(', ') || '—'}</p>
         </div>
-        <div className="sm:col-span-2 flex items-center gap-4 text-xs text-navy-DEFAULT/50">
-          <span>Current scholars: <strong className="text-navy-DEFAULT">{mp.current_scholar_count}</strong> / {mp.max_scholars}</span>
+        <div className="sm:col-span-2 flex items-center gap-4 text-xs text-navy-500/50">
+          <span>Current scholars: <strong className="text-navy-500">{mp.current_scholar_count}</strong> / {mp.max_scholars}</span>
           <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${mp.has_capacity ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-500'}`}>
             {mp.has_capacity ? 'Has capacity' : 'Full'}
           </span>
@@ -102,7 +102,7 @@ function ScholarSection({ user, editing, onChange }: { user: User; editing: bool
     <div>
       <div className="flex items-center gap-2 mb-4">
         <BrandStar />
-        <h2 className="text-sm font-bold text-navy-DEFAULT uppercase tracking-widest">Scholar Profile</h2>
+        <h2 className="text-sm font-bold text-navy-500 uppercase tracking-widest">Scholar Profile</h2>
       </div>
       <div className="bg-white rounded-2xl shadow-card p-6 grid grid-cols-1 sm:grid-cols-2 gap-5">
         <Field label="University" value={sp.university} placeholder="Your university" editing={editing} onChange={v => onChange('scholar_profile.university', v)} />
@@ -115,18 +115,18 @@ function ScholarSection({ user, editing, onChange }: { user: User; editing: bool
         </div>
         {sp.soft_skills_current && Object.keys(sp.soft_skills_current).length > 0 && (
           <div className="sm:col-span-2">
-            <p className="text-[10px] font-semibold text-navy-DEFAULT/40 uppercase tracking-wider mb-2">Soft Skills Progress</p>
+            <p className="text-[10px] font-semibold text-navy-500/40 uppercase tracking-wider mb-2">Soft Skills Progress</p>
             <div className="space-y-2">
               {Object.entries(sp.soft_skills_current).map(([skill, score]) => (
                 <div key={skill} className="flex items-center gap-3">
-                  <span className="text-xs text-navy-DEFAULT/60 w-36 capitalize">{skill.replace(/_/g, ' ')}</span>
+                  <span className="text-xs text-navy-500/60 w-36 capitalize">{skill.replace(/_/g, ' ')}</span>
                   <div className="flex-1 bg-purple-50 rounded-full h-2">
                     <div
                       className="bg-gradient-brand-soft h-2 rounded-full transition-all"
                       style={{ width: `${Math.min(100, (Number(score) / 10) * 100)}%` }}
                     />
                   </div>
-                  <span className="text-xs font-semibold text-navy-DEFAULT w-6 text-right">{score}</span>
+                  <span className="text-xs font-semibold text-navy-500 w-6 text-right">{score}</span>
                 </div>
               ))}
             </div>
@@ -145,7 +145,7 @@ function SponsorSection({ user, editing, onChange }: { user: User; editing: bool
     <div>
       <div className="flex items-center gap-2 mb-4">
         <BrandStar />
-        <h2 className="text-sm font-bold text-navy-DEFAULT uppercase tracking-widest">Sponsor Profile</h2>
+        <h2 className="text-sm font-bold text-navy-500 uppercase tracking-widest">Sponsor Profile</h2>
       </div>
       <div className="bg-white rounded-2xl shadow-card p-6 grid grid-cols-1 sm:grid-cols-2 gap-5">
         <Field label="Organisation" value={sp.organisation} editing={editing} onChange={v => onChange('sponsor_profile.organisation', v)} />
@@ -207,7 +207,7 @@ export default function ProfilePage() {
   if (!user || !form.first_name) {
     return (
       <div className="flex justify-center py-16">
-        <div className="w-8 h-8 border-2 border-purple-DEFAULT/30 border-t-pink-DEFAULT rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-purple-500/30 border-t-pink-500 rounded-full animate-spin" />
       </div>
     );
   }
@@ -259,7 +259,7 @@ export default function ProfilePage() {
                 <button
                   type="submit"
                   disabled={updateMutation.isPending}
-                  className="text-xs font-semibold bg-pink-DEFAULT hover:bg-pink-600 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                  className="text-xs font-semibold bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
                 >
                   {updateMutation.isPending ? 'Saving…' : 'Save changes'}
                 </button>
@@ -287,7 +287,7 @@ export default function ProfilePage() {
       <div>
         <div className="flex items-center gap-2 mb-4">
           <BrandStar />
-          <h2 className="text-sm font-bold text-navy-DEFAULT uppercase tracking-widest">Personal Information</h2>
+          <h2 className="text-sm font-bold text-navy-500 uppercase tracking-widest">Personal Information</h2>
         </div>
         <div className="bg-white rounded-2xl shadow-card p-6 grid grid-cols-1 sm:grid-cols-2 gap-5">
           <Field label="First name" value={form.first_name} editing={editing} onChange={v => setField('first_name', v)} />
@@ -306,17 +306,17 @@ export default function ProfilePage() {
       <div>
         <div className="flex items-center gap-2 mb-4">
           <BrandStar />
-          <h2 className="text-sm font-bold text-navy-DEFAULT uppercase tracking-widest">Notifications</h2>
+          <h2 className="text-sm font-bold text-navy-500 uppercase tracking-widest">Notifications</h2>
         </div>
         <div className="bg-white rounded-2xl shadow-card p-6 space-y-3">
           <label className="flex items-center justify-between cursor-pointer">
             <div>
-              <p className="text-sm font-semibold text-navy-DEFAULT">Email notifications</p>
-              <p className="text-xs text-navy-DEFAULT/40">Receive updates by email</p>
+              <p className="text-sm font-semibold text-navy-500">Email notifications</p>
+              <p className="text-xs text-navy-500/40">Receive updates by email</p>
             </div>
             <input
               type="checkbox"
-              className="accent-pink-DEFAULT w-4 h-4"
+              className="accent-pink-500 w-4 h-4"
               checked={form.notification_email ?? false}
               onChange={e => setForm(prev => ({ ...prev, notification_email: e.target.checked }))}
               disabled={!editing}

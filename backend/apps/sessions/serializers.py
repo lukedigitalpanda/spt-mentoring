@@ -8,7 +8,7 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
     class Meta:
         model = AvailabilitySlot
         fields = ['id', 'mentor', 'mentor_name', 'start_time', 'end_time', 'is_booked', 'notes']
-        read_only_fields = ['is_booked']
+        read_only_fields = ['is_booked', 'mentor']
 
 
 class SessionFeedbackSerializer(serializers.ModelSerializer):

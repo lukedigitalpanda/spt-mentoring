@@ -1,0 +1,88 @@
+/*
+ * form_fix.css — loaded LAST via ModelAdmin.Media, so these rules
+ * win over forms.css regardless of specificity/load order.
+ *
+ * Fixes: select dropdowns cut off, delete button cut off.
+ */
+
+/* ── Kill overflow clipping everywhere it matters ───────────── */
+.form-row,
+.submit-row,
+.module,
+.inline-group,
+.inline-related,
+fieldset {
+  overflow: visible !important;
+}
+
+/* ── Aligned layout: use flexbox so labels + inputs sit nicely ─ */
+.aligned .form-row {
+  display: flex !important;
+  align-items: flex-start !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  overflow: visible !important;
+  padding: 12px 20px !important;
+}
+
+/* Label: fixed width, no float */
+.aligned .form-row > label:not(.vCheckboxLabel),
+.aligned label:not(.vCheckboxLabel) {
+  float: none !important;
+  width: 160px !important;
+  min-width: 160px !important;
+  flex-shrink: 0 !important;
+  padding-top: 8px !important;
+  box-sizing: border-box !important;
+}
+
+/* After-pseudo used by Django for vertical alignment — neutralise it */
+.aligned label:not(.vCheckboxLabel)::after {
+  display: none !important;
+}
+
+/* Input wrapper: take remaining space */
+.aligned .form-row > div,
+.aligned .form-row .related-widget-wrapper {
+  flex: 1 1 auto !important;
+  min-width: 180px !important;
+  max-width: 100% !important;
+  overflow: visible !important;
+}
+
+/* Select and text inputs: fill available width */
+.aligned .form-row select,
+.aligned .form-row input[type=text],
+.aligned .form-row input[type=number],
+.aligned .form-row input[type=email],
+.aligned .form-row textarea {
+  width: 100% !important;
+  max-width: 520px !important;
+  box-sizing: border-box !important;
+}
+
+/* Standalone selects outside aligned (e.g. inline stacked) */
+.inline-related .form-row select {
+  min-width: 180px !important;
+  max-width: 100% !important;
+}
+
+/* ── Submit row ──────────────────────────────────────────────── */
+.submit-row {
+  overflow: visible !important;
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 10px !important;
+}
+
+/* Delete link: full height, no clipping */
+.submit-row a.deletelink,
+.deletelink-box,
+.deletelink-box a {
+  overflow: visible !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  height: auto !important;
+  line-height: normal !important;
+}

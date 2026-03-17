@@ -1,0 +1,93 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block title %}{{ title }} | SPT Mentoring Admin{% endblock %}
+
+{% block branding %}
+<a href="{% url 'admin:index' %}" id="spt-brand">
+  <img src="{% static 'admin/img/sptlogo.webp' %}" alt="Smallpeice Trust" height="36">
+  <span>Mentoring Admin</span>
+</a>
+{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'admin/css/brand.css' %}">
+{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+  /* ── Replace Django's float-based .aligned layout with flexbox ──────────────
+     The old layout used float:left on labels + overflow:hidden on .form-row to
+     contain those floats. overflow:hidden was clipping select elements and the
+     delete button. Flexbox needs neither floats nor overflow:hidden. */
+
+  .aligned .form-row {
+    display: flex !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+    overflow: visible !important;
+    flex-wrap: wrap !important;
+  }
+
+  /* Label: fixed width, no float */
+  .aligned label:not(.vCheckboxLabel) {
+    float: none !important;
+    width: 160px !important;
+    flex-shrink: 0 !important;
+    padding-top: 10px !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Input wrapper: takes remaining space */
+  .aligned .form-row > div,
+  .aligned .form-row .related-widget-wrapper,
+  .aligned .form-row p.readonly {
+    flex: 1 1 auto !important;
+    min-width: 200px !important;
+  }
+
+  /* Selects fill available space, never squashed */
+  .aligned .form-row select,
+  .aligned .form-row .vSelect {
+    width: 100% !important;
+    max-width: 500px !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Submit row: use flex, no overflow:hidden clipping the delete link */
+  .submit-row {
+    overflow: visible !important;
+    display: flex !important;
+    align-items: center !important;
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+  }
+
+  /* Inline table: scroll rather than clip */
+  .inline-group .tabular {
+    overflow-x: auto !important;
+    display: block !important;
+  }
+
+  /* Modules/groups: visible so nothing gets cropped */
+  .module, .inline-group { overflow: visible !important; }
+
+  /* Headers: round only the top corners */
+  .module caption, .module h2, .inline-group h2, fieldset h2 {
+    border-radius: 12px 12px 0 0 !important;
+  }
+</style>
+{% endblock %}
+
+{% block header %}
+<div id="spt-announcement">Helping young people become future engineers</div>
+{{ block.super }}
+{% endblock %}
+
+{% block footer %}
+<div id="footer">
+  <p>Smallpeice Trust Mentoring Platform &mdash; <a href="https://mentoring.smallpeice.online" target="_blank">Back to app</a></p>
+</div>
+{% endblock %}

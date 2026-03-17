@@ -40,7 +40,7 @@ function StarRating({ value, size = 'sm' }: { value: number; size?: 'sm' | 'md' 
         </svg>
       ))}
       {value > 0 && (
-        <span className="text-xs text-navy-DEFAULT/60 ml-1">{value.toFixed(1)}</span>
+        <span className="text-xs text-navy-500/60 ml-1">{value.toFixed(1)}</span>
       )}
     </div>
   );
@@ -62,7 +62,7 @@ function MentorCard({ mentor, onBook }: { mentor: MentorCard; onBook: (m: Mentor
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="font-bold text-navy-DEFAULT text-base leading-tight">{mentor.full_name}</h3>
+              <h3 className="font-bold text-navy-500 text-base leading-tight">{mentor.full_name}</h3>
               {mentor.is_verified && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-green-50 text-green-700 px-1.5 py-0.5 rounded-full">
                   <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
@@ -74,7 +74,7 @@ function MentorCard({ mentor, onBook }: { mentor: MentorCard; onBook: (m: Mentor
             </div>
 
             {mentor.mentor_profile?.job_title && (
-              <p className="text-xs text-purple-DEFAULT font-medium mt-0.5 truncate">
+              <p className="text-xs text-purple-500 font-medium mt-0.5 truncate">
                 {mentor.mentor_profile.job_title}
                 {mentor.mentor_profile.company ? ` · ${mentor.mentor_profile.company}` : ''}
               </p>
@@ -83,7 +83,7 @@ function MentorCard({ mentor, onBook }: { mentor: MentorCard; onBook: (m: Mentor
             <div className="flex items-center gap-3 mt-1.5 flex-wrap">
               <StarRating value={mentor.avg_rating} />
               {mentor.session_count > 0 && (
-                <span className="text-xs text-navy-DEFAULT/50">
+                <span className="text-xs text-navy-500/50">
                   {mentor.session_count} session{mentor.session_count !== 1 ? 's' : ''}
                 </span>
               )}
@@ -98,7 +98,7 @@ function MentorCard({ mentor, onBook }: { mentor: MentorCard; onBook: (m: Mentor
               {mentor.engineering_discipline}
             </span>
             {mentor.location && (
-              <span className="inline-block text-[11px] text-navy-DEFAULT/50 ml-2">
+              <span className="inline-block text-[11px] text-navy-500/50 ml-2">
                 📍 {mentor.location}
               </span>
             )}
@@ -107,7 +107,7 @@ function MentorCard({ mentor, onBook }: { mentor: MentorCard; onBook: (m: Mentor
 
         {/* Bio */}
         {mentor.bio && (
-          <p className="mt-3 text-xs text-navy-DEFAULT/70 line-clamp-2 leading-relaxed">
+          <p className="mt-3 text-xs text-navy-500/70 line-clamp-2 leading-relaxed">
             {mentor.bio}
           </p>
         )}
@@ -116,12 +116,12 @@ function MentorCard({ mentor, onBook }: { mentor: MentorCard; onBook: (m: Mentor
         {mentor.mentor_profile?.skills?.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-1">
             {mentor.mentor_profile.skills.slice(0, 4).map(skill => (
-              <span key={skill} className="text-[10px] bg-gray-50 border border-gray-200 text-navy-DEFAULT/70 px-2 py-0.5 rounded-full">
+              <span key={skill} className="text-[10px] bg-gray-50 border border-gray-200 text-navy-500/70 px-2 py-0.5 rounded-full">
                 {skill}
               </span>
             ))}
             {mentor.mentor_profile.skills.length > 4 && (
-              <span className="text-[10px] text-navy-DEFAULT/40">+{mentor.mentor_profile.skills.length - 4} more</span>
+              <span className="text-[10px] text-navy-500/40">+{mentor.mentor_profile.skills.length - 4} more</span>
             )}
           </div>
         )}
@@ -145,8 +145,8 @@ function BookRequestModal({ mentor, onClose }: { mentor: MentorCard; onClose: ()
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-navy-DEFAULT text-lg">Request a Session</h3>
-          <button onClick={onClose} className="text-navy-DEFAULT/40 hover:text-navy-DEFAULT">
+          <h3 className="font-bold text-navy-500 text-lg">Request a Session</h3>
+          <button onClick={onClose} className="text-navy-500/40 hover:text-navy-500">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -158,14 +158,14 @@ function BookRequestModal({ mentor, onClose }: { mentor: MentorCard; onClose: ()
             {mentor.first_name[0]}{mentor.last_name[0]}
           </div>
           <div>
-            <p className="font-semibold text-navy-DEFAULT text-sm">{mentor.full_name}</p>
+            <p className="font-semibold text-navy-500 text-sm">{mentor.full_name}</p>
             {mentor.mentor_profile?.job_title && (
-              <p className="text-xs text-purple-DEFAULT">{mentor.mentor_profile.job_title}</p>
+              <p className="text-xs text-purple-500">{mentor.mentor_profile.job_title}</p>
             )}
           </div>
         </div>
 
-        <p className="text-sm text-navy-DEFAULT/70 mb-5">
+        <p className="text-sm text-navy-500/70 mb-5">
           Head to the Sessions page to view {mentor.first_name}'s available time slots and book a session.
         </p>
 
@@ -178,7 +178,7 @@ function BookRequestModal({ mentor, onClose }: { mentor: MentorCard; onClose: ()
           </button>
           <button
             onClick={onClose}
-            className="px-4 py-2.5 rounded-xl border border-gray-200 text-navy-DEFAULT/60 text-sm font-medium hover:bg-gray-50"
+            className="px-4 py-2.5 rounded-xl border border-gray-200 text-navy-500/60 text-sm font-medium hover:bg-gray-50"
           >
             Cancel
           </button>
@@ -227,8 +227,8 @@ export default function MentorDiscoveryPage() {
             </svg>
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-navy-DEFAULT">Find a Mentor</h1>
-            <p className="text-sm text-navy-DEFAULT/60">Discover engineers who can guide your journey</p>
+            <h1 className="text-2xl font-bold text-navy-500">Find a Mentor</h1>
+            <p className="text-sm text-navy-500/60">Discover engineers who can guide your journey</p>
           </div>
         </div>
       </div>
@@ -241,30 +241,30 @@ export default function MentorDiscoveryPage() {
             placeholder="Search by name, discipline, company..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-DEFAULT"
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
           />
         </div>
 
         <select
           value={discipline}
           onChange={e => setDiscipline(e.target.value)}
-          className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-DEFAULT"
+          className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
         >
           <option value="">All disciplines</option>
           {DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
 
-        <label className="flex items-center gap-2 text-sm font-medium text-navy-DEFAULT cursor-pointer select-none">
+        <label className="flex items-center gap-2 text-sm font-medium text-navy-500 cursor-pointer select-none">
           <input
             type="checkbox"
             checked={availableOnly}
             onChange={e => setAvailableOnly(e.target.checked)}
-            className="rounded border-gray-300 text-purple-DEFAULT focus:ring-purple-DEFAULT"
+            className="rounded border-gray-300 text-purple-500 focus:ring-purple-500"
           />
           Available now
         </label>
 
-        <span className="text-xs text-navy-DEFAULT/50 ml-auto">
+        <span className="text-xs text-navy-500/50 ml-auto">
           {filtered.length} mentor{filtered.length !== 1 ? 's' : ''}
         </span>
       </div>
@@ -272,10 +272,10 @@ export default function MentorDiscoveryPage() {
       {/* Grid */}
       {isLoading ? (
         <div className="flex justify-center py-20">
-          <div className="w-10 h-10 border-4 border-purple-200 border-t-purple-DEFAULT rounded-full animate-spin" />
+          <div className="w-10 h-10 border-4 border-purple-200 border-t-purple-500 rounded-full animate-spin" />
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-20 text-navy-DEFAULT/40">
+        <div className="text-center py-20 text-navy-500/40">
           <svg className="w-12 h-12 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
               d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />

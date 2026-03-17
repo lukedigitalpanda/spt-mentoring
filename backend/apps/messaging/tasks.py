@@ -7,11 +7,12 @@ logger = logging.getLogger(__name__)
 
 @shared_task
 def send_mass_message_task(mass_message_id):
-    """Send a MassMessage to all targeted recipients via email."""
+    """Send a MassMessage: creates an in-app conversation per recipient + optional email."""
     from django.core.mail import send_mail
     from django.utils import timezone
     from apps.users.models import User
-    from .models import MassMessage
+    from apps.notifications.models import Notification
+    from .models import MassMessage, Conversation, Message
 
     try:
         msg = MassMessage.objects.get(pk=mass_message_id)
@@ -19,36 +20,89 @@ def send_mass_message_task(mass_message_id):
         logger.error('MassMessage %d not found', mass_message_id)
         return
 
+    # Get or create the Arkwright system sender
+    arkwright, created = User.objects.get_or_create(
+        email='arkwright@spt.org',
+        defaults={
+            'username': 'arkwright',
+            'first_name': 'Arkwright',
+            'last_name': '',
+            'role': 'admin',
+            'is_active': True,
+            'notification_email': False,
+            'is_verified': True,
+        },
+    )
+    if created:
+        arkwright.set_unusable_password()
+        arkwright.save()
+
     # Collect recipients
-    qs = User.objects.filter(is_active=True, notification_email=True)
+    qs = User.objects.filter(is_active=True).exclude(pk=arkwright.pk)
     if msg.recipient_roles:
         qs = qs.filter(role__in=msg.recipient_roles)
+    if msg.recipient_programmes.exists():
+        prog_ids = msg.recipient_programmes.values_list('pk', flat=True)
+        qs = qs.filter(cohort_memberships__cohort__programme_id__in=prog_ids).distinct()
     if msg.recipient_cohorts.exists():
         cohort_ids = msg.recipient_cohorts.values_list('pk', flat=True)
         qs = qs.filter(cohort_memberships__cohort_id__in=cohort_ids).distinct()
 
-    emails = list(qs.values_list('email', flat=True))
-    if not emails:
+    recipients = list(qs)
+    if not recipients:
         logger.warning('MassMessage %d has no recipients', mass_message_id)
+        msg.status = MassMessage.Status.SENT
+        msg.sent_at = timezone.now()
+        msg.recipient_count = 0
+        msg.save(update_fields=['status', 'sent_at', 'recipient_count'])
         return
 
-    for email in emails:
+    for recipient in recipients:
+        # Create a private 1-to-1 conversation between Arkwright and the recipient
+        conv = Conversation.objects.create(
+            conversation_type=Conversation.ConversationType.DIRECT,
+            subject=msg.subject,
+        )
+        conv.participants.add(arkwright, recipient)
+
+        # Insert message already marked DELIVERED (bypasses moderation — it's admin-sent)
+        Message.objects.create(
+            conversation=conv,
+            sender=arkwright,
+            body=msg.body,
+            status=Message.Status.DELIVERED,
+        )
+
+        # In-app notification
         try:
-            send_mail(
-                subject=msg.subject,
-                message=msg.body,
-                from_email=msg.send_from_email,
-                recipient_list=[email],
-                fail_silently=False,
+            Notification.objects.create(
+                user=recipient,
+                notification_type=Notification.Type.MESSAGE,
+                title='New message from Arkwright',
+                body=msg.subject,
+                link='/messages',
             )
         except Exception:
-            logger.exception('Failed to send mass message to %s', email)
+            logger.exception('Failed to create notification for user %d', recipient.pk)
+
+        # Email (only if user has email notifications enabled)
+        if recipient.notification_email and recipient.email:
+            try:
+                send_mail(
+                    subject=msg.subject,
+                    message=msg.body,
+                    from_email=msg.send_from_email,
+                    recipient_list=[recipient.email],
+                    fail_silently=True,
+                )
+            except Exception:
+                logger.exception('Failed to send email to %s', recipient.email)
 
     msg.status = MassMessage.Status.SENT
     msg.sent_at = timezone.now()
-    msg.recipient_count = len(emails)
+    msg.recipient_count = len(recipients)
     msg.save(update_fields=['status', 'sent_at', 'recipient_count'])
-    logger.info('MassMessage %d sent to %d recipients', mass_message_id, len(emails))
+    logger.info('MassMessage %d sent to %d recipients', mass_message_id, len(recipients))
 
 
 @shared_task

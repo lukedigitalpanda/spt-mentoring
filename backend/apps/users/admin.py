@@ -10,6 +10,12 @@ class UserAdmin(ImportExportModelAdmin, BaseUserAdmin):
     list_filter = ['role', 'is_active', 'is_verified']
     search_fields = ['email', 'first_name', 'last_name', 'crm_id']
     ordering = ['last_name', 'first_name']
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ('email', 'username', 'first_name', 'last_name', 'role', 'password1', 'password2'),
+        }),
+    )
     fieldsets = BaseUserAdmin.fieldsets + (
         ('Role & Profile', {'fields': ('role', 'phone', 'bio', 'profile_picture', 'date_of_birth', 'location', 'engineering_discipline', 'interests')}),
         ('Safeguarding', {'fields': ('is_verified', 'safeguarding_training_date')}),

@@ -7,15 +7,15 @@ import BrandLogo from '../ui/BrandLogo';
 import api from '../../utils/api';
 
 const navItems = [
-  { path: '/',           label: 'Home',             roles: ['scholar','mentor','sponsor','alumni','admin'] },
-  { path: '/messages',   label: 'Messages',         roles: ['scholar','mentor','sponsor','alumni','admin'] },
-  { path: '/sessions',   label: 'Sessions',         roles: ['scholar','mentor','alumni','admin'] },
-  { path: '/goals',      label: 'Goals',            roles: ['scholar','mentor','alumni','admin'] },
+  { path: '/',           label: 'Home',             roles: ['scholar','mentor','sponsor','alumni'] },
+  { path: '/messages',   label: 'Messages',         roles: ['scholar','mentor','sponsor','alumni'] },
+  { path: '/sessions',   label: 'Sessions',         roles: ['scholar','mentor','alumni'] },
+  { path: '/goals',      label: 'Goals',            roles: ['scholar','mentor','alumni'] },
   { path: '/mentors',    label: 'Find a Mentor',    roles: ['scholar','alumni'] },
-  { path: '/forums',     label: 'Forums',           roles: ['scholar','mentor','alumni','admin'] },
-  { path: '/resources',  label: 'Resources',        roles: ['scholar','mentor','sponsor','alumni','admin'] },
-  { path: '/surveys',    label: 'Surveys',          roles: ['scholar','mentor','admin'] },
-  { path: '/news',       label: 'News',             roles: ['scholar','mentor','sponsor','alumni','admin'] },
+  { path: '/forums',     label: 'Forums',           roles: ['scholar','mentor','alumni'] },
+  { path: '/resources',  label: 'Resources',        roles: ['scholar','mentor','sponsor','alumni'] },
+  { path: '/surveys',    label: 'Surveys',          roles: ['scholar','mentor'] },
+  { path: '/news',       label: 'News',             roles: ['scholar','mentor','sponsor','alumni'] },
   { path: '/admin',      label: 'Admin',            roles: ['admin'] },
 ];
 
@@ -39,13 +39,13 @@ function NotificationBell() {
   const count = data?.count ?? 0;
   return (
     <button onClick={() => navigate('/notifications')}
-      className="relative p-1.5 text-navy-DEFAULT/50 hover:text-navy-DEFAULT transition-colors">
+      className="relative p-1.5 text-navy-500/50 hover:text-navy-500 transition-colors">
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
           d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
       </svg>
       {count > 0 && (
-        <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-pink-DEFAULT rounded-full text-[9px] font-bold text-white flex items-center justify-center">
+        <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-pink-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center">
           {count > 9 ? '9+' : count}
         </span>
       )}
@@ -61,7 +61,7 @@ function PushPromptBanner() {
 
   return (
     <div className="bg-purple-50 border-b border-purple-200 px-4 py-2.5 flex items-center justify-between gap-4">
-      <p className="text-sm text-navy-DEFAULT">
+      <p className="text-sm text-navy-500">
         <span className="font-semibold">Stay in the loop</span> — enable browser notifications for session updates and messages.
       </p>
       <div className="flex items-center gap-2 flex-shrink-0">
@@ -73,7 +73,7 @@ function PushPromptBanner() {
         </button>
         <button
           onClick={() => { localStorage.setItem('push_dismissed', '1'); setDismissed(true); }}
-          className="text-xs text-navy-DEFAULT/50 hover:text-navy-DEFAULT transition-colors"
+          className="text-xs text-navy-500/50 hover:text-navy-500 transition-colors"
         >
           Not now
         </button>
@@ -96,10 +96,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }, []);
 
   const handleLogout = () => { logout(); navigate('/login'); };
-  const visibleNav = navItems.filter(i => user && i.roles.includes(user.role));
+  const visibleNav = navItems.filter(i => {
+    if (!user || !i.roles.includes(user.role)) return false;
+    if (i.path === '/mentors' && user.has_mentor) return false;
+    return true;
+  });
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: '#f8f7fc' }}>
+    <div className="min-h-screen flex flex-col overflow-x-hidden" style={{ background: '#f8f7fc' }}>
       {/* ── Top announcement bar ── */}
       <div className="bg-gradient-brand text-white text-xs py-1.5 text-center font-medium tracking-wide">
         Helping young people become future engineers
@@ -114,13 +118,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center justify-between h-16">
 
             {/* Logo */}
-            <Link to="/" className="flex items-center space-x-2.5 flex-shrink-0">
+            <Link to={user?.role === 'admin' ? '/admin' : '/'} className="flex items-center space-x-2.5 flex-shrink-0">
               <BrandLogo size={36} />
               <div className="leading-none">
-                <p className="text-xs font-semibold text-pink-DEFAULT tracking-wide uppercase">
+                <p className="text-xs font-semibold text-pink-500 tracking-wide uppercase">
                   Arkwright Engineering Scholars
                 </p>
-                <p className="text-[11px] text-navy-DEFAULT/60 font-medium">Mentoring Platform</p>
+                <p className="text-[11px] text-navy-500/60 font-medium">Mentoring Platform</p>
               </div>
             </Link>
 
@@ -134,12 +138,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     to={item.path}
                     className={`px-3.5 py-2 rounded-lg text-sm font-medium transition-all ${
                       active
-                        ? 'text-pink-DEFAULT bg-pink-50 font-semibold'
-                        : 'text-navy-DEFAULT/70 hover:text-navy-DEFAULT hover:bg-purple-50'
+                        ? 'text-pink-500 bg-pink-50 font-semibold'
+                        : 'text-navy-500/70 hover:text-navy-500 hover:bg-purple-50'
                     }`}
                   >
                     {item.label}
-                    {active && <span className="block h-0.5 bg-pink-DEFAULT rounded-full mt-0.5 mx-auto w-4/5" />}
+                    {active && <span className="block h-0.5 bg-pink-500 rounded-full mt-0.5 mx-auto w-4/5" />}
                   </Link>
                 );
               })}
@@ -155,7 +159,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       {user.first_name[0]}{user.last_name[0]}
                     </div>
                     <div className="hidden lg:block leading-none text-right">
-                      <p className="text-xs font-semibold text-navy-DEFAULT group-hover:text-purple-DEFAULT transition-colors">
+                      <p className="text-xs font-semibold text-navy-500 group-hover:text-purple-500 transition-colors">
                         {user.full_name}
                       </p>
                       <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize ${roleBadgeStyle[user.role] || 'bg-gray-100 text-gray-600'}`}>
@@ -165,7 +169,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   </Link>
                   <button
                     onClick={handleLogout}
-                    className="text-xs font-medium text-navy-DEFAULT/50 hover:text-pink-DEFAULT transition-colors"
+                    className="text-xs font-medium text-navy-500/50 hover:text-pink-500 transition-colors"
                   >
                     Sign out
                   </button>
@@ -175,7 +179,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
             {/* Mobile burger */}
             <button
-              className="md:hidden p-2 rounded-lg text-navy-DEFAULT/60 hover:bg-purple-50"
+              className="md:hidden p-2 rounded-lg text-navy-500/60 hover:bg-purple-50"
               onClick={() => setMobileOpen(o => !o)}
               aria-label="Toggle menu"
             >
@@ -198,8 +202,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 onClick={() => setMobileOpen(false)}
                 className={`block px-3 py-2 rounded-lg text-sm font-medium ${
                   location.pathname === item.path
-                    ? 'text-pink-DEFAULT bg-pink-50 font-semibold'
-                    : 'text-navy-DEFAULT/70'
+                    ? 'text-pink-500 bg-pink-50 font-semibold'
+                    : 'text-navy-500/70'
                 }`}
               >
                 {item.label}
@@ -208,7 +212,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {user && (
               <button
                 onClick={handleLogout}
-                className="block w-full text-left px-3 py-2 text-sm text-pink-DEFAULT font-medium"
+                className="block w-full text-left px-3 py-2 text-sm text-pink-500 font-medium"
               >
                 Sign out
               </button>

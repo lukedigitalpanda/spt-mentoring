@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import api from '../utils/api';
-import type { Resource, PaginatedResponse } from '../types';
+import type { Resource, ResourceCategory, PaginatedResponse } from '../types';
 
 function BrandStar({ size = 16 }: { size?: number }) {
   return (
@@ -10,12 +10,6 @@ function BrandStar({ size = 16 }: { size?: number }) {
         stroke="#e01e8c" strokeWidth="2.5" strokeLinecap="round" />
     </svg>
   );
-}
-
-interface ResourceCategory {
-  id: number;
-  name: string;
-  description: string;
 }
 
 const typeIcon: Record<string, React.ReactNode> = {
@@ -37,19 +31,47 @@ const typeIcon: Record<string, React.ReactNode> = {
 };
 
 const typeColour: Record<string, string> = {
-  document: 'bg-purple-50 text-purple-DEFAULT',
-  link:     'bg-orange-50 text-orange-DEFAULT',
-  video:    'bg-pink-50 text-pink-DEFAULT',
+  document: 'bg-purple-50 text-purple-500',
+  link:     'bg-orange-50 text-orange-500',
+  video:    'bg-pink-50 text-pink-500',
 };
 
-const audienceBadge: Record<string, string> = {
-  all:     'bg-green-100 text-green-700',
-  scholar: 'bg-purple-100 text-purple-700',
-  mentor:  'bg-navy-100 text-navy-DEFAULT',
-  sponsor: 'bg-orange-100 text-orange-700',
-  admin:   'bg-gray-100 text-gray-600',
-};
+// ── Folder card ───────────────────────────────────────────────────────────────
+function FolderCard({ category, onClick }: { category: ResourceCategory; onClick: () => void }) {
+  const total = category.resource_count + category.children_count;
+  return (
+    <button
+      onClick={onClick}
+      className="w-full text-left bg-white rounded-2xl shadow-card hover:shadow-brand transition-all p-5 flex items-start gap-4 group"
+    >
+      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center flex-shrink-0 group-hover:from-pink-100 group-hover:to-purple-100 transition-all">
+        <svg className="w-6 h-6 text-pink-500" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M20 6H12l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z" />
+        </svg>
+      </div>
+      <div className="flex-1 min-w-0">
+        <h3 className="font-bold text-sm text-navy-500 group-hover:text-pink-500 transition-colors">{category.name}</h3>
+        {category.description && (
+          <p className="text-xs text-navy-500/50 mt-0.5 line-clamp-2">{category.description}</p>
+        )}
+        <div className="flex items-center gap-3 mt-2 text-[10px] text-navy-500/40 font-semibold uppercase tracking-wide">
+          {category.resource_count > 0 && (
+            <span>{category.resource_count} file{category.resource_count !== 1 ? 's' : ''}</span>
+          )}
+          {category.children_count > 0 && (
+            <span>{category.children_count} subfolder{category.children_count !== 1 ? 's' : ''}</span>
+          )}
+          {total === 0 && <span>Empty</span>}
+        </div>
+      </div>
+      <svg className="w-4 h-4 text-navy-500/20 group-hover:text-pink-400 transition-colors flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+      </svg>
+    </button>
+  );
+}
 
+// ── Resource card ─────────────────────────────────────────────────────────────
 function ResourceCard({ resource }: { resource: Resource }) {
   const downloadMutation = useMutation({
     mutationFn: () => api.post(`/resources/${resource.id}/download/`),
@@ -71,25 +93,19 @@ function ResourceCard({ resource }: { resource: Resource }) {
           {typeIcon[resource.resource_type]}
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-bold text-sm text-navy-DEFAULT line-clamp-2 leading-snug">{resource.title}</h3>
-          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-navy-DEFAULT/40 capitalize">
-              {resource.resource_type}
-            </span>
-            <span className="text-navy-DEFAULT/20">·</span>
-            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize ${audienceBadge[resource.audience] ?? ''}`}>
-              {resource.audience}
-            </span>
-          </div>
+          <h3 className="font-bold text-sm text-navy-500 line-clamp-2 leading-snug">{resource.title}</h3>
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-navy-500/40 capitalize mt-0.5 inline-block">
+            {resource.resource_type}
+          </span>
         </div>
       </div>
 
       {resource.description && (
-        <p className="text-xs text-navy-DEFAULT/50 line-clamp-3 mb-4 flex-1">{resource.description}</p>
+        <p className="text-xs text-navy-500/50 line-clamp-3 mb-4 flex-1">{resource.description}</p>
       )}
 
       <div className="flex items-center justify-between mt-auto pt-3 border-t border-purple-50">
-        <span className="text-xs text-navy-DEFAULT/30 flex items-center gap-1">
+        <span className="text-xs text-navy-500/30 flex items-center gap-1">
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>
@@ -98,7 +114,7 @@ function ResourceCard({ resource }: { resource: Resource }) {
         {(resource.url || resource.file) && (
           <button
             onClick={handleAction}
-            className="text-xs font-semibold text-pink-DEFAULT hover:text-pink-600 flex items-center gap-1 transition-colors"
+            className="text-xs font-semibold text-pink-500 hover:text-pink-600 flex items-center gap-1 transition-colors"
           >
             {resource.resource_type === 'link' ? 'Open link' : 'Download'}
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -111,25 +127,64 @@ function ResourceCard({ resource }: { resource: Resource }) {
   );
 }
 
+// ── Main page ─────────────────────────────────────────────────────────────────
 export default function ResourcesPage() {
-  const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
-  const [selectedType, setSelectedType] = useState<string>('');
+  // folderPath = stack of { id, name } representing the current location
+  const [folderPath, setFolderPath] = useState<{ id: number; name: string }[]>([]);
   const [search, setSearch] = useState('');
+  const [selectedType, setSelectedType] = useState('');
 
-  const { data: categories } = useQuery<PaginatedResponse<ResourceCategory>>({
-    queryKey: ['resource-categories'],
-    queryFn: () => api.get('/resources/categories/').then(r => r.data),
+  const currentFolderId = folderPath.length > 0 ? folderPath[folderPath.length - 1].id : null;
+  const isSearching = search.length > 0 || selectedType !== '';
+
+  // Subfolders inside current folder (or root folders when at root)
+  const { data: folders } = useQuery<PaginatedResponse<ResourceCategory>>({
+    queryKey: ['resource-categories', currentFolderId],
+    queryFn: () => {
+      const params = currentFolderId
+        ? `/resources/categories/?parent=${currentFolderId}`
+        : '/resources/categories/?root=true';
+      return api.get(params).then(r => r.data);
+    },
+    enabled: !isSearching,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
-  const params = new URLSearchParams();
-  if (selectedCategory) params.set('category', String(selectedCategory));
-  if (selectedType) params.set('resource_type', selectedType);
-  if (search) params.set('search', search);
+  // Resources in the current folder (or search results)
+  const resourceParams = new URLSearchParams();
+  if (isSearching) {
+    if (search) resourceParams.set('search', search);
+    if (selectedType) resourceParams.set('resource_type', selectedType);
+  } else if (currentFolderId !== null) {
+    resourceParams.set('category', String(currentFolderId));
+  } else {
+    // Root view — show uncategorised resources only
+    resourceParams.set('no_category', 'true');
+  }
 
-  const { data: resources, isLoading } = useQuery<PaginatedResponse<Resource>>({
-    queryKey: ['resources', selectedCategory, selectedType, search],
-    queryFn: () => api.get(`/resources/?${params.toString()}`).then(r => r.data),
+  const { data: resources, isLoading: resourcesLoading } = useQuery<PaginatedResponse<Resource>>({
+    queryKey: ['resources', currentFolderId, search, selectedType],
+    queryFn: () => api.get(`/resources/?${resourceParams.toString()}`).then(r => r.data),
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
+
+  const navigateInto = (cat: ResourceCategory) => {
+    setFolderPath(prev => {
+      if (prev.length > 0 && prev[prev.length - 1].id === cat.id) return prev;
+      return [...prev, { id: cat.id, name: cat.name }];
+    });
+  };
+
+  const navigateTo = (index: number) => {
+    // index -1 = root
+    setFolderPath(prev => prev.slice(0, index + 1));
+  };
+
+  const hasFolders = (folders?.results?.length ?? 0) > 0;
+  const hasResources = (resources?.results?.length ?? 0) > 0;
+  const isRootView = currentFolderId === null && !isSearching;
 
   return (
     <div>
@@ -143,24 +198,21 @@ export default function ResourcesPage() {
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Search & type filter */}
       <div className="bg-white rounded-2xl shadow-card p-4 mb-6 flex flex-col sm:flex-row gap-3">
-        {/* Search */}
         <div className="relative flex-1">
-          <svg className="w-4 h-4 text-navy-DEFAULT/30 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 text-navy-500/30 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
-            className="w-full pl-9 pr-3 py-2 text-sm border border-purple-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-DEFAULT/30"
-            placeholder="Search resources…"
+            className="w-full pl-9 pr-3 py-2 text-sm border border-purple-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/30"
+            placeholder="Search all resources…"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
         </div>
-
-        {/* Type filter */}
         <select
-          className="text-sm border border-purple-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-DEFAULT/30 text-navy-DEFAULT"
+          className="text-sm border border-purple-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500/30 text-navy-500"
           value={selectedType}
           onChange={e => setSelectedType(e.target.value)}
         >
@@ -169,73 +221,98 @@ export default function ResourcesPage() {
           <option value="link">Links</option>
           <option value="video">Videos</option>
         </select>
-
-        {/* Category filter */}
-        {categories?.results && categories.results.length > 0 && (
-          <select
-            className="text-sm border border-purple-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-DEFAULT/30 text-navy-DEFAULT"
-            value={selectedCategory ?? ''}
-            onChange={e => setSelectedCategory(e.target.value ? Number(e.target.value) : null)}
-          >
-            <option value="">All categories</option>
-            {categories.results.map(cat => (
-              <option key={cat.id} value={cat.id}>{cat.name}</option>
-            ))}
-          </select>
-        )}
       </div>
 
-      {/* Category pills */}
-      {categories?.results && categories.results.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-6">
-          <button
-            onClick={() => setSelectedCategory(null)}
-            className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-all ${
-              selectedCategory === null
-                ? 'bg-pink-DEFAULT text-white shadow-brand'
-                : 'bg-white text-navy-DEFAULT/60 shadow-card hover:shadow-brand'
-            }`}
-          >
-            All
-          </button>
-          {categories.results.map(cat => (
-            <button
-              key={cat.id}
-              onClick={() => setSelectedCategory(cat.id === selectedCategory ? null : cat.id)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-all ${
-                selectedCategory === cat.id
-                  ? 'bg-pink-DEFAULT text-white shadow-brand'
-                  : 'bg-white text-navy-DEFAULT/60 shadow-card hover:shadow-brand'
-              }`}
-            >
-              {cat.name}
+      {/* Search results mode */}
+      {isSearching ? (
+        <>
+          <div className="flex items-center gap-2 mb-4">
+            <BrandStar />
+            <h2 className="text-sm font-bold text-navy-500 uppercase tracking-widest">
+              {resources ? `${resources.count} result${resources.count !== 1 ? 's' : ''}` : 'Searching…'}
+            </h2>
+            <button onClick={() => { setSearch(''); setSelectedType(''); }}
+              className="ml-auto text-xs text-pink-500 hover:underline">
+              Clear search
             </button>
-          ))}
-        </div>
-      )}
-
-      {/* Results */}
-      <div className="flex items-center gap-2 mb-4">
-        <BrandStar />
-        <h2 className="text-sm font-bold text-navy-DEFAULT uppercase tracking-widest">
-          {resources ? `${resources.count} resource${resources.count !== 1 ? 's' : ''}` : 'Resources'}
-        </h2>
-      </div>
-
-      {isLoading ? (
-        <div className="flex justify-center py-12">
-          <div className="w-8 h-8 border-2 border-purple-DEFAULT/30 border-t-pink-DEFAULT rounded-full animate-spin" />
-        </div>
-      ) : !resources?.results?.length ? (
-        <div className="text-center py-16">
-          <p className="text-sm text-navy-DEFAULT/40">No resources found matching your filters.</p>
-        </div>
+          </div>
+          {resourcesLoading ? (
+            <div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-purple-500/30 border-t-pink-500 rounded-full animate-spin" /></div>
+          ) : !hasResources ? (
+            <p className="text-center py-16 text-sm text-navy-500/40">No resources match your search.</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {resources!.results.map(r => <ResourceCard key={r.id} resource={r} />)}
+            </div>
+          )}
+        </>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {resources.results.map(r => (
-            <ResourceCard key={r.id} resource={r} />
-          ))}
-        </div>
+        <>
+          {/* Breadcrumb */}
+          <nav className="flex items-center gap-1 mb-6 flex-wrap">
+            <button
+              onClick={() => navigateTo(-1)}
+              className={`text-sm font-semibold transition-colors ${folderPath.length === 0 ? 'text-navy-500' : 'text-pink-500 hover:text-pink-600'}`}
+            >
+              Resources
+            </button>
+            {folderPath.map((crumb, i) => (
+              <React.Fragment key={crumb.id}>
+                <svg className="w-3.5 h-3.5 text-navy-500/30 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                </svg>
+                <button
+                  onClick={() => navigateTo(i)}
+                  className={`text-sm font-semibold transition-colors ${i === folderPath.length - 1 ? 'text-navy-500' : 'text-pink-500 hover:text-pink-600'}`}
+                >
+                  {crumb.name}
+                </button>
+              </React.Fragment>
+            ))}
+          </nav>
+
+          {/* Folders */}
+          {hasFolders && (
+            <>
+              <div className="flex items-center gap-2 mb-3">
+                <BrandStar />
+                <h2 className="text-sm font-bold text-navy-500 uppercase tracking-widest">Folders</h2>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
+                {folders!.results.map(cat => (
+                  <FolderCard key={cat.id} category={cat} onClick={() => navigateInto(cat)} />
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Resources in this folder */}
+          {resourcesLoading ? (
+            <div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-purple-500/30 border-t-pink-500 rounded-full animate-spin" /></div>
+          ) : hasResources ? (
+            <>
+              <div className="flex items-center gap-2 mb-4">
+                <BrandStar />
+                <h2 className="text-sm font-bold text-navy-500 uppercase tracking-widest">
+                  {isRootView ? 'Uncategorised' : 'Files'}
+                  <span className="ml-2 text-navy-500/40 normal-case font-normal">({resources!.count})</span>
+                </h2>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {resources!.results.map(r => <ResourceCard key={r.id} resource={r} />)}
+              </div>
+            </>
+          ) : !hasFolders ? (
+            <div className="text-center py-16">
+              <div className="w-16 h-16 rounded-2xl bg-purple-50 flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-purple-300" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M20 6H12l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z" />
+                </svg>
+              </div>
+              <p className="text-sm text-navy-500/40">This folder is empty.</p>
+            </div>
+          ) : null}
+        </>
       )}
     </div>
   );

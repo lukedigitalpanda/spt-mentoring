@@ -11,6 +11,11 @@ class ResourceCategory(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
     order = models.PositiveIntegerField(default=0)
+    parent = models.ForeignKey(
+        'self', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='children',
+        help_text='Leave blank for a top-level folder',
+    )
 
     class Meta:
         ordering = ['order', 'name']

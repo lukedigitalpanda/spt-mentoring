@@ -40,6 +40,22 @@ class Cohort(models.Model):
         return f'{self.programme.name} – {self.name}'
 
 
+class SiteSettings(models.Model):
+    """Singleton model for global site configuration."""
+    logo = models.ImageField(upload_to='branding/', blank=True, null=True, help_text='Main site logo')
+
+    class Meta:
+        verbose_name = 'Site Settings'
+        verbose_name_plural = 'Site Settings'
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return 'Site Settings'
+
+
 class CohortMembership(models.Model):
     """Associates a user with a cohort and tracks their role within it."""
     cohort = models.ForeignKey(Cohort, on_delete=models.CASCADE, related_name='memberships')

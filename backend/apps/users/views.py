@@ -48,6 +48,64 @@ class UserViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         return Response(UserSerializer(request.user, context={'request': request}).data)
 
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated], url_path='me/data-export')
+    def my_data_export(self, request):
+        """GDPR Article 20 — return all personal data held about the authenticated user as JSON."""
+        from apps.messaging.models import Message
+        from apps.sessions.models import MentoringSession
+        user = request.user
+
+        messages = Message.objects.filter(
+            sender=user, status=Message.Status.DELIVERED
+        ).values('body', 'sent_at', 'conversation_id')
+
+        sessions = MentoringSession.objects.filter(
+            scholar=user
+        ).values('status', 'scheduled_at', 'notes') if hasattr(user, 'scholar_sessions') else []
+
+        data = {
+            'exported_at': timezone.now().isoformat(),
+            'profile': {
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'role': user.role,
+                'phone': user.phone,
+                'bio': user.bio,
+                'location': user.location,
+                'date_of_birth': str(user.date_of_birth) if user.date_of_birth else None,
+                'date_joined': user.date_joined.isoformat(),
+                'notification_email': user.notification_email,
+                'notification_sms': user.notification_sms,
+            },
+            'messages_sent': list(messages),
+            'sessions': list(sessions),
+        }
+        return Response(data)
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated], url_path='me/close-account')
+    def close_account(self, request):
+        """GDPR Article 17 — anonymise the user's personal data and deactivate the account.
+        The account record is retained for audit purposes but all identifying information is removed."""
+        import uuid
+        user = request.user
+        anon_id = uuid.uuid4().hex[:12]
+
+        user.first_name = 'Deleted'
+        user.last_name = 'User'
+        user.email = f'deleted-{anon_id}@removed.invalid'
+        user.username = f'deleted-{anon_id}'
+        user.phone = ''
+        user.bio = ''
+        user.location = ''
+        user.date_of_birth = None
+        user.profile_picture = None
+        user.is_active = False
+        user.deactivated_at = timezone.now()
+        user.save()
+
+        return Response({'status': 'account closed'}, status=status.HTTP_200_OK)
+
     @action(detail=False, methods=['get'], permission_classes=[IsAdminUser])
     def export(self, request):
         """Export all users as CSV data."""
@@ -107,7 +165,19 @@ class MentoringMatchViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
-        serializer.save(matched_by=self.request.user)
+        match = serializer.save(matched_by=self.request.user)
+        # Auto-create a direct conversation between the matched pair if one doesn't exist
+        from apps.messaging.models import Conversation
+        existing = Conversation.objects.filter(
+            conversation_type=Conversation.ConversationType.DIRECT,
+            participants=match.scholar,
+        ).filter(participants=match.mentor)
+        if not existing.exists():
+            conv = Conversation.objects.create(
+                conversation_type=Conversation.ConversationType.DIRECT,
+                subject=f'{match.scholar.full_name} & {match.mentor.full_name}',
+            )
+            conv.participants.add(match.scholar, match.mentor)
 
     @action(detail=False, methods=['get'], permission_classes=[IsAdminUser])
     def unmatched_scholars(self, request):

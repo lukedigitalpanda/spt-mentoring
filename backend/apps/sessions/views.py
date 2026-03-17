@@ -71,11 +71,10 @@ class MentoringSessionViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if user.is_staff or user.role == 'admin':
             return MentoringSession.objects.select_related('mentor', 'scholar').prefetch_related('feedback').all()
+        from django.db.models import Q
         return MentoringSession.objects.filter(
-            mentor=user
-        ).union(
-            MentoringSession.objects.filter(scholar=user)
-        ).order_by('-start_time')
+            Q(mentor=user) | Q(scholar=user)
+        ).select_related('mentor', 'scholar').prefetch_related('feedback').order_by('-start_time')
 
     def perform_create(self, serializer):
         session = serializer.save(created_by=self.request.user)
@@ -165,11 +164,10 @@ class SessionFeedbackViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if user.is_staff or user.role == 'admin':
             return SessionFeedback.objects.select_related('from_user', 'session').all()
+        from django.db.models import Q
         return SessionFeedback.objects.filter(
-            session__mentor=user
-        ).union(
-            SessionFeedback.objects.filter(session__scholar=user)
-        )
+            Q(session__mentor=user) | Q(session__scholar=user)
+        ).select_related('from_user', 'session')
 
     def perform_create(self, serializer):
         serializer.save(from_user=self.request.user)

@@ -3,9 +3,18 @@ from .models import ResourceCategory, Resource, SharedDocument
 
 
 class ResourceCategorySerializer(serializers.ModelSerializer):
+    resource_count = serializers.SerializerMethodField()
+    children_count = serializers.SerializerMethodField()
+
+    def get_resource_count(self, obj):
+        return obj.resources.filter(is_active=True).count()
+
+    def get_children_count(self, obj):
+        return obj.children.count()
+
     class Meta:
         model = ResourceCategory
-        fields = '__all__'
+        fields = ['id', 'name', 'description', 'order', 'parent', 'resource_count', 'children_count']
 
 
 class ResourceSerializer(serializers.ModelSerializer):

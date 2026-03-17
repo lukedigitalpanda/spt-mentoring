@@ -40,15 +40,15 @@ export interface MentoringSession {
 export interface Message {
   id: number;
   sender: User;
-  content: string;
+  body: string;
   sent_at: string;
   status: string;
 }
 
 export interface Conversation {
   id: number;
-  participants: User[];
-  last_message: Message | null;
+  participant_details: User[];
+  last_message: { id: number; body: string; sent_at: string; sender: string } | null;
   unread_count: number;
 }
 

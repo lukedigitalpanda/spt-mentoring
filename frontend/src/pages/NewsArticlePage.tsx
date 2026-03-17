@@ -21,7 +21,7 @@ export default function NewsArticlePage() {
   if (isLoading) {
     return (
       <div className="flex justify-center py-16">
-        <div className="w-8 h-8 border-2 border-purple-DEFAULT/30 border-t-pink-DEFAULT rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-purple-500/30 border-t-pink-500 rounded-full animate-spin" />
       </div>
     );
   }
@@ -29,8 +29,8 @@ export default function NewsArticlePage() {
   if (isError || !item) {
     return (
       <div className="text-center py-16">
-        <p className="text-sm text-navy-DEFAULT/50 mb-4">Article not found.</p>
-        <Link to="/news" className="text-xs font-semibold text-pink-DEFAULT hover:underline">
+        <p className="text-sm text-navy-500/50 mb-4">Article not found.</p>
+        <Link to="/news" className="text-xs font-semibold text-pink-500 hover:underline">
           ← Back to News
         </Link>
       </div>
@@ -42,7 +42,7 @@ export default function NewsArticlePage() {
       {/* Back */}
       <Link
         to="/news"
-        className="inline-flex items-center gap-1.5 text-xs font-semibold text-pink-DEFAULT hover:underline mb-6"
+        className="inline-flex items-center gap-1.5 text-xs font-semibold text-pink-500 hover:underline mb-6"
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
@@ -63,18 +63,18 @@ export default function NewsArticlePage() {
       <div className="mb-6">
         <div className="flex flex-wrap items-center gap-2 mb-3">
           {item.is_featured && (
-            <span className="text-xs font-semibold bg-pink-50 text-pink-DEFAULT px-2.5 py-1 rounded-full">
+            <span className="text-xs font-semibold bg-pink-50 text-pink-500 px-2.5 py-1 rounded-full">
               Featured
             </span>
           )}
-          <span className="text-xs font-semibold bg-purple-50 text-purple-DEFAULT px-2.5 py-1 rounded-full capitalize">
+          <span className="text-xs font-semibold bg-purple-50 text-purple-500 px-2.5 py-1 rounded-full capitalize">
             {item.audience === 'all' ? 'General' : item.audience}
           </span>
         </div>
 
-        <h1 className="text-3xl font-extrabold text-navy-DEFAULT leading-snug">{item.title}</h1>
+        <h1 className="text-3xl font-extrabold text-navy-500 leading-snug">{item.title}</h1>
 
-        <div className="flex items-center gap-3 mt-3 text-xs text-navy-DEFAULT/40">
+        <div className="flex items-center gap-3 mt-3 text-xs text-navy-500/40">
           {item.author_name && <span>By {item.author_name}</span>}
           {item.published_at && (
             <>
@@ -87,21 +87,21 @@ export default function NewsArticlePage() {
 
       {/* Summary */}
       {item.summary && (
-        <p className="text-base text-navy-DEFAULT/70 font-medium leading-relaxed border-l-4 border-pink-DEFAULT pl-4 mb-8">
+        <p className="text-base text-navy-500/70 font-medium leading-relaxed border-l-4 border-pink-500 pl-4 mb-8">
           {item.summary}
         </p>
       )}
 
       {/* Body */}
       {item.body && (
-        <div className="prose prose-sm max-w-none text-navy-DEFAULT/80 leading-relaxed whitespace-pre-wrap">
+        <div className="prose prose-sm max-w-none text-navy-500/80 leading-relaxed whitespace-pre-wrap">
           {item.body}
         </div>
       )}
 
       {/* Footer */}
       <div className="mt-12 pt-6 border-t border-purple-50 flex justify-between items-center">
-        <Link to="/news" className="text-xs font-semibold text-pink-DEFAULT hover:underline flex items-center gap-1">
+        <Link to="/news" className="text-xs font-semibold text-pink-500 hover:underline flex items-center gap-1">
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
           </svg>

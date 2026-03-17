@@ -10,7 +10,7 @@ import type { Conversation, Message } from '../types';
 
 function ConversationItem({ conv, onPress }: { conv: Conversation; onPress: () => void }) {
   const { user } = useAuth();
-  const other = conv.participants.find(p => p.id !== user?.id);
+  const other = conv.participant_details?.find(p => p.id !== user?.id);
   const initials = other ? `${other.first_name[0]}${other.last_name[0]}` : '?';
 
   return (
@@ -28,7 +28,7 @@ function ConversationItem({ conv, onPress }: { conv: Conversation; onPress: () =
           )}
         </View>
         <Text style={styles.convPreview} numberOfLines={1}>
-          {conv.last_message?.content ?? 'No messages yet'}
+          {conv.last_message?.body ?? 'No messages yet'}
         </Text>
       </View>
       {conv.unread_count > 0 && (
@@ -53,7 +53,7 @@ function MessageThread({ convId, onBack }: { convId: number; onBack: () => void 
   });
 
   const send = useMutation({
-    mutationFn: (content: string) => api.post(`/messaging/conversations/${convId}/messages/`, { content }),
+    mutationFn: (body: string) => api.post(`/messaging/conversations/${convId}/messages/`, { body }),
     onSuccess: () => {
       setText('');
       qc.invalidateQueries({ queryKey: ['messages', convId] });
@@ -79,7 +79,7 @@ function MessageThread({ convId, onBack }: { convId: number; onBack: () => void 
             return (
               <View key={m.id} style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
                 {!mine && <Text style={styles.bubbleSender}>{m.sender.first_name}</Text>}
-                <Text style={[styles.bubbleText, mine && { color: '#fff' }]}>{m.content}</Text>
+                <Text style={[styles.bubbleText, mine && { color: '#fff' }]}>{m.body}</Text>
                 <Text style={[styles.bubbleTime, mine && { color: 'rgba(255,255,255,0.6)' }]}>
                   {new Date(m.sent_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                 </Text>
@@ -112,11 +112,21 @@ function MessageThread({ convId, onBack }: { convId: number; onBack: () => void 
 }
 
 export default function MessagesScreen() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
   const [activeConv, setActiveConv] = useState<number | null>(null);
   const { data: conversations = [], isLoading, refetch } = useQuery<Conversation[]>({
     queryKey: ['conversations'],
     queryFn: () => api.get('/messaging/conversations/').then(r => r.data.results ?? r.data),
     refetchInterval: 10_000,
+  });
+
+  const contactSupport = useMutation({
+    mutationFn: () => api.post('/messaging/conversations/contact_support/').then(r => r.data),
+    onSuccess: (conv) => {
+      qc.invalidateQueries({ queryKey: ['conversations'] });
+      setActiveConv(conv.id);
+    },
   });
 
   if (activeConv !== null) {
@@ -129,6 +139,18 @@ export default function MessagesScreen() {
 
   return (
     <View style={styles.container}>
+      {user?.role === 'scholar' && (
+        <TouchableOpacity
+          style={[styles.supportBtn, contactSupport.isPending && { opacity: 0.6 }]}
+          onPress={() => contactSupport.mutate()}
+          disabled={contactSupport.isPending}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.supportBtnText}>
+            {contactSupport.isPending ? 'Opening…' : '🛟  Message Arkwright for Support'}
+          </Text>
+        </TouchableOpacity>
+      )}
       {isLoading ? (
         <ActivityIndicator color="#9333ea" style={{ marginTop: 40 }} />
       ) : (
@@ -205,4 +227,11 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', paddingVertical: 60 },
   emptyIcon: { fontSize: 36, marginBottom: 10 },
   emptyText: { color: '#1e1b4b', opacity: 0.4, fontSize: 14 },
+
+  supportBtn: {
+    margin: 12, borderRadius: 14, paddingVertical: 13, paddingHorizontal: 16,
+    backgroundColor: '#9333ea', alignItems: 'center',
+    shadowColor: '#9333ea', shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
+  },
+  supportBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 });

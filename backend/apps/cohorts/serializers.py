@@ -1,5 +1,11 @@
 from rest_framework import serializers
-from .models import Programme, Cohort, CohortMembership
+from .models import Programme, Cohort, CohortMembership, SiteSettings
+
+
+class SiteSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SiteSettings
+        fields = ['logo']
 
 
 class ProgrammeSerializer(serializers.ModelSerializer):

@@ -1,10 +1,20 @@
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
+from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Programme, Cohort, CohortMembership
-from .serializers import ProgrammeSerializer, CohortSerializer, CohortMembershipSerializer
+from .models import Programme, Cohort, CohortMembership, SiteSettings
+from .serializers import ProgrammeSerializer, CohortSerializer, CohortMembershipSerializer, SiteSettingsSerializer
+
+
+class SiteSettingsView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        obj, _ = SiteSettings.objects.get_or_create(pk=1)
+        serializer = SiteSettingsSerializer(obj, context={'request': request})
+        return Response(serializer.data)
 
 
 class ProgrammeViewSet(viewsets.ModelViewSet):

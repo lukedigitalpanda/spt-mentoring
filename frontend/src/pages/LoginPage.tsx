@@ -32,7 +32,7 @@ export default function LoginPage() {
         {/* Decorative circles */}
         <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-white/5" />
         <div className="absolute bottom-12 -left-24 w-72 h-72 rounded-full bg-white/5" />
-        <div className="absolute top-1/2 left-1/2 w-32 h-32 rounded-full bg-pink-DEFAULT/20 blur-2xl" />
+        <div className="absolute top-1/2 left-1/2 w-32 h-32 rounded-full bg-pink-500/20 blur-2xl" />
 
         <div className="relative z-10">
           <div className="flex items-center space-x-3 mb-12">
@@ -74,15 +74,15 @@ export default function LoginPage() {
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center space-x-2 mb-8">
             <BrandLogo size={32} />
-            <p className="font-bold text-navy-DEFAULT text-sm">Arkwright Engineering Scholars</p>
+            <p className="font-bold text-navy-500 text-sm">Arkwright Engineering Scholars</p>
           </div>
 
-          <h2 className="text-2xl font-extrabold text-navy-DEFAULT">Sign in to your account</h2>
-          <p className="mt-1 text-sm text-navy-DEFAULT/50">Welcome back – your mentoring journey continues here.</p>
+          <h2 className="text-2xl font-extrabold text-navy-500">Sign in to your account</h2>
+          <p className="mt-1 text-sm text-navy-500/50">Welcome back – your mentoring journey continues here.</p>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-5">
             <div>
-              <label htmlFor="email" className="block text-xs font-semibold text-navy-DEFAULT mb-1.5 uppercase tracking-wider">
+              <label htmlFor="email" className="block text-xs font-semibold text-navy-500 mb-1.5 uppercase tracking-wider">
                 Email address
               </label>
               <input
@@ -93,16 +93,16 @@ export default function LoginPage() {
                 required
                 autoComplete="email"
                 placeholder="you@example.com"
-                className="w-full border-2 border-purple-100 rounded-xl px-4 py-3 text-sm text-navy-DEFAULT bg-white focus:outline-none focus:border-pink-DEFAULT transition-colors placeholder:text-navy-DEFAULT/30"
+                className="w-full border-2 border-purple-100 rounded-xl px-4 py-3 text-sm text-navy-500 bg-white focus:outline-none focus:border-pink-500 transition-colors placeholder:text-navy-500/30"
               />
             </div>
 
             <div>
               <div className="flex justify-between items-center mb-1.5">
-                <label htmlFor="password" className="block text-xs font-semibold text-navy-DEFAULT uppercase tracking-wider">
+                <label htmlFor="password" className="block text-xs font-semibold text-navy-500 uppercase tracking-wider">
                   Password
                 </label>
-                <a href="#" className="text-xs text-pink-DEFAULT hover:text-pink-600 font-medium">
+                <a href="#" className="text-xs text-pink-500 hover:text-pink-600 font-medium">
                   Forgot password?
                 </a>
               </div>
@@ -113,7 +113,7 @@ export default function LoginPage() {
                 onChange={e => setPassword(e.target.value)}
                 required
                 autoComplete="current-password"
-                className="w-full border-2 border-purple-100 rounded-xl px-4 py-3 text-sm text-navy-DEFAULT bg-white focus:outline-none focus:border-pink-DEFAULT transition-colors"
+                className="w-full border-2 border-purple-100 rounded-xl px-4 py-3 text-sm text-navy-500 bg-white focus:outline-none focus:border-pink-500 transition-colors"
               />
             </div>
 
@@ -150,11 +150,11 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="mt-8 text-center text-xs text-navy-DEFAULT/40 leading-relaxed">
+          <p className="mt-8 text-center text-xs text-navy-500/40 leading-relaxed">
             All communications on this platform are moderated for safeguarding purposes.
             <br />If you need access, contact{' '}
-            <a href="mailto:mentoring@smallpeice.co.uk" className="text-pink-DEFAULT hover:underline">
-              mentoring@smallpeice.co.uk
+            <a href="mailto:mentoring@smallpeicetrust.org.uk" className="text-pink-500 hover:underline">
+              mentoring@smallpeicetrust.org.uk
             </a>
           </p>
         </div>

@@ -7,6 +7,7 @@ Usage:
 """
 import re
 import logging
+from django.db import models
 from django.utils import timezone
 from .models import BlockedTerm, FlaggedTerm, ModerationLog
 
@@ -80,12 +81,62 @@ class ModerationService:
                 triggered_term=flagged_hit,
             )
             logger.warning('Message #%d flagged – term: %s', message.pk, flagged_hit)
+            cls._alert_staff(message, flagged_hit)
             return ModerationResult('flagged', flagged_hit)
 
         # 3. Passed – deliver
         message.status = Message.Status.DELIVERED
         message.save(update_fields=['status'])
         return ModerationResult('delivered')
+
+    @classmethod
+    def _alert_staff(cls, message, triggered_term):
+        """Email all active staff/admin users and create their in-app notification."""
+        from django.conf import settings
+        from django.core.mail import send_mail
+        from apps.users.models import User
+        from apps.notifications.models import Notification
+
+        admin_url = (
+            f'{settings.CSRF_TRUSTED_ORIGINS[0]}/admin/messaging/message/{message.pk}/change/'
+        )
+        subject = f'[SPT Moderation] Flagged message requires review (#{message.pk})'
+        body = (
+            f'A message has been flagged for review.\n\n'
+            f'Sender:       {message.sender.full_name} ({message.sender.email})\n'
+            f'Triggered by: "{triggered_term}"\n'
+            f'Preview:      {message.body[:200]}\n\n'
+            f'Review it here: {admin_url}\n'
+        )
+
+        staff_users = User.objects.filter(is_active=True).filter(
+            models.Q(is_staff=True) | models.Q(role='admin')
+        )
+
+        emails = [u.email for u in staff_users if u.email]
+        if emails:
+            try:
+                send_mail(
+                    subject=subject,
+                    message=body,
+                    from_email=settings.MENTORING_FROM_EMAIL,
+                    recipient_list=emails,
+                    fail_silently=True,
+                )
+            except Exception:
+                logger.exception('Failed to send moderation alert emails')
+
+        for admin in staff_users:
+            try:
+                Notification.objects.create(
+                    user=admin,
+                    notification_type=Notification.Type.SYSTEM,
+                    title='Flagged message requires review',
+                    body=f'Message from {message.sender.full_name} matched term "{triggered_term}"',
+                    link=f'/admin/messaging/message/{message.pk}/change/',
+                )
+            except Exception:
+                logger.exception('Failed to create moderation notification for user %d', admin.pk)
 
     @classmethod
     def approve(cls, message, admin_user, notes=''):

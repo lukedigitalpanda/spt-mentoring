@@ -1,10 +1,12 @@
 from rest_framework import serializers
 from .models import Conversation, Message, MessageRead, MassMessage, AbuseReport
+from apps.users.validators import validate_message_attachment
 
 
 class MessageSerializer(serializers.ModelSerializer):
     sender_name = serializers.CharField(source='sender.full_name', read_only=True)
     is_read = serializers.SerializerMethodField()
+    attachment = serializers.FileField(validators=[validate_message_attachment], required=False, allow_null=True)
 
     class Meta:
         model = Message
@@ -25,11 +27,12 @@ class ConversationSerializer(serializers.ModelSerializer):
     last_message = serializers.SerializerMethodField()
     unread_count = serializers.SerializerMethodField()
     participant_names = serializers.SerializerMethodField()
+    participant_details = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
         fields = [
-            'id', 'conversation_type', 'participants', 'participant_names',
+            'id', 'conversation_type', 'participants', 'participant_names', 'participant_details',
             'subject', 'created_at', 'is_private', 'cohort',
             'last_message', 'unread_count',
         ]
@@ -51,12 +54,29 @@ class ConversationSerializer(serializers.ModelSerializer):
     def get_participant_names(self, obj):
         return [p.full_name for p in obj.participants.all()]
 
+    def get_participant_details(self, obj):
+        return [
+            {'id': p.pk, 'full_name': p.full_name, 'first_name': p.first_name, 'last_name': p.last_name}
+            for p in obj.participants.all()
+        ]
+
 
 class MassMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = MassMessage
         fields = '__all__'
         read_only_fields = ['sent_at', 'status', 'recipient_count', 'sender']
+
+    def create(self, validated_data):
+        # ManyToMany fields must be set after save
+        programmes = validated_data.pop('recipient_programmes', [])
+        cohorts = validated_data.pop('recipient_cohorts', [])
+        instance = super().create(validated_data)
+        if programmes:
+            instance.recipient_programmes.set(programmes)
+        if cohorts:
+            instance.recipient_cohorts.set(cohorts)
+        return instance
 
 
 class AbuseReportSerializer(serializers.ModelSerializer):

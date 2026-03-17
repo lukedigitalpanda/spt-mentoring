@@ -33,7 +33,7 @@ function QuestionField({
   value: string | string[];
   onChange: (v: string | string[]) => void;
 }) {
-  const baseInput = 'w-full border border-purple-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-DEFAULT/30';
+  const baseInput = 'w-full border border-purple-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors';
 
   if (question.question_type === 'text') {
     return (
@@ -59,15 +59,15 @@ function QuestionField({
             onClick={() => onChange(String(n))}
             className={`w-9 h-9 rounded-lg text-sm font-semibold transition-all ${
               value === String(n)
-                ? 'bg-pink-DEFAULT text-white shadow-brand'
-                : 'bg-white border border-purple-100 text-navy-DEFAULT hover:border-pink-DEFAULT hover:text-pink-DEFAULT'
+                ? 'bg-pink-500 text-white shadow-brand'
+                : 'bg-white border border-purple-200 text-navy-500 hover:border-pink-500 hover:text-pink-500'
             }`}
           >
             {n}
           </button>
         ))}
         {question.question_type === 'scale' && (
-          <div className="w-full flex justify-between text-[10px] text-navy-DEFAULT/40 mt-1">
+          <div className="w-full flex justify-between text-[10px] text-navy-500/40 mt-1">
             <span>Strongly disagree</span>
             <span>Strongly agree</span>
           </div>
@@ -88,9 +88,9 @@ function QuestionField({
               checked={value === opt}
               onChange={() => onChange(opt)}
               required={question.is_required}
-              className="accent-pink-DEFAULT"
+              className="accent-pink"
             />
-            <span className="text-sm text-navy-DEFAULT/80 group-hover:text-navy-DEFAULT">{opt}</span>
+            <span className="text-sm text-navy-500/80 group-hover:text-navy-500">{opt}</span>
           </label>
         ))}
       </div>
@@ -111,9 +111,9 @@ function QuestionField({
               type="checkbox"
               checked={checked.includes(opt)}
               onChange={() => toggle(opt)}
-              className="accent-pink-DEFAULT"
+              className="accent-pink"
             />
-            <span className="text-sm text-navy-DEFAULT/80 group-hover:text-navy-DEFAULT">{opt}</span>
+            <span className="text-sm text-navy-500/80 group-hover:text-navy-500">{opt}</span>
           </label>
         ))}
       </div>
@@ -155,11 +155,11 @@ function SurveyForm({ survey, onDone }: { survey: Survey; onDone: () => void }) 
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <h2 className="text-xl font-extrabold text-navy-DEFAULT mb-2">Thank you!</h2>
-        <p className="text-sm text-navy-DEFAULT/50 mb-6">Your response has been recorded.</p>
+        <h2 className="text-xl font-extrabold text-navy-500 mb-2">Thank you!</h2>
+        <p className="text-sm text-navy-500/50 mb-6">Your response has been recorded.</p>
         <button
           onClick={onDone}
-          className="text-xs font-semibold text-pink-DEFAULT hover:underline flex items-center gap-1 mx-auto"
+          className="text-xs font-semibold text-pink-500 hover:underline flex items-center gap-1 mx-auto"
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
@@ -175,32 +175,32 @@ function SurveyForm({ survey, onDone }: { survey: Survey; onDone: () => void }) 
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={onDone} className="text-xs font-semibold text-pink-DEFAULT hover:underline flex items-center gap-1">
+        <button onClick={onDone} className="text-xs font-semibold text-pink-500 hover:underline flex items-center gap-1">
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
           </svg>
           Surveys
         </button>
-        <span className="text-navy-DEFAULT/30">/</span>
-        <span className="text-sm font-bold text-navy-DEFAULT truncate">{survey.title}</span>
+        <span className="text-navy-500/30">/</span>
+        <span className="text-sm font-bold text-navy-500 truncate">{survey.title}</span>
       </div>
 
       <div className="bg-white rounded-2xl shadow-card p-6 mb-6">
-        <h2 className="text-xl font-extrabold text-navy-DEFAULT mb-1">{survey.title}</h2>
+        <h2 className="text-xl font-extrabold text-navy-500 mb-1">{survey.title}</h2>
         {survey.description && (
-          <p className="text-sm text-navy-DEFAULT/60">{survey.description}</p>
+          <p className="text-sm text-navy-500/60">{survey.description}</p>
         )}
         {survey.closes_at && (
-          <p className="text-xs text-navy-DEFAULT/40 mt-2">Closes {fmtDate(survey.closes_at)}</p>
+          <p className="text-xs text-navy-500/40 mt-2">Closes {fmtDate(survey.closes_at)}</p>
         )}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {sorted.map((q, idx) => (
           <div key={q.id} className="bg-white rounded-2xl shadow-card p-5">
-            <p className="text-sm font-semibold text-navy-DEFAULT mb-1">
+            <p className="text-sm font-semibold text-navy-500 mb-1">
               {idx + 1}. {q.text}
-              {q.is_required && <span className="text-pink-DEFAULT ml-0.5">*</span>}
+              {q.is_required && <span className="text-pink-500 ml-0.5">*</span>}
             </p>
             <QuestionField
               question={q}
@@ -220,7 +220,7 @@ function SurveyForm({ survey, onDone }: { survey: Survey; onDone: () => void }) 
           <button
             type="submit"
             disabled={submitMutation.isPending}
-            className="bg-pink-DEFAULT text-white text-sm font-semibold px-6 py-2.5 rounded-xl hover:bg-pink-600 transition-colors disabled:opacity-50 shadow-brand"
+            className="bg-pink-500 text-white text-sm font-semibold px-6 py-2.5 rounded-xl hover:bg-pink-600 transition-colors disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed shadow-brand"
           >
             {submitMutation.isPending ? 'Submitting…' : 'Submit survey'}
           </button>
@@ -241,26 +241,26 @@ function SurveyCard({ survey, onSelect }: { survey: Survey; onSelect: () => void
               {survey.status}
             </span>
           </div>
-          <h3 className="font-bold text-sm text-navy-DEFAULT">{survey.title}</h3>
+          <h3 className="font-bold text-sm text-navy-500">{survey.title}</h3>
         </div>
         <div className="flex flex-col items-end flex-shrink-0 gap-0.5">
-          <span className="text-xs font-bold text-navy-DEFAULT">{survey.questions.length}</span>
-          <span className="text-[10px] text-navy-DEFAULT/40">questions</span>
+          <span className="text-xs font-bold text-navy-500">{survey.questions.length}</span>
+          <span className="text-[10px] text-navy-500/40">questions</span>
         </div>
       </div>
 
       {survey.description && (
-        <p className="text-xs text-navy-DEFAULT/50 line-clamp-2 mb-4">{survey.description}</p>
+        <p className="text-xs text-navy-500/50 line-clamp-2 mb-4">{survey.description}</p>
       )}
 
       <div className="flex items-center justify-between pt-3 border-t border-purple-50">
-        <div className="text-xs text-navy-DEFAULT/40">
+        <div className="text-xs text-navy-500/40">
           {survey.closes_at && <span>Closes {fmtDate(survey.closes_at)}</span>}
         </div>
         {survey.status === 'active' && (
           <button
             onClick={onSelect}
-            className="text-xs font-semibold bg-pink-DEFAULT text-white px-3 py-1.5 rounded-lg hover:bg-pink-600 transition-colors"
+            className="text-sm font-semibold bg-pink-500 text-white px-4 py-2 rounded-lg hover:bg-pink-600 transition-colors shadow-brand"
           >
             Take survey
           </button>
@@ -302,15 +302,15 @@ export default function SurveysPage() {
 
       <div className="flex items-center gap-2 mb-4">
         <BrandStar />
-        <h2 className="text-sm font-bold text-navy-DEFAULT uppercase tracking-widest">Available Surveys</h2>
+        <h2 className="text-sm font-bold text-navy-500 uppercase tracking-widest">Available Surveys</h2>
       </div>
 
       {isLoading ? (
         <div className="flex justify-center py-12">
-          <div className="w-8 h-8 border-2 border-purple-DEFAULT/30 border-t-pink-DEFAULT rounded-full animate-spin" />
+          <div className="w-8 h-8 border-2 border-purple-500/30 border-t-pink-500 rounded-full animate-spin" />
         </div>
       ) : !data?.results?.length ? (
-        <div className="text-center py-16 text-sm text-navy-DEFAULT/40">
+        <div className="text-center py-16 text-sm text-navy-500/40">
           No surveys available at the moment.
         </div>
       ) : (

@@ -21,6 +21,7 @@ export interface User {
   mentor_profile?: MentorProfile;
   scholar_profile?: ScholarProfile;
   sponsor_profile?: SponsorProfile;
+  has_mentor: boolean;
 }
 
 export interface MentorProfile {
@@ -118,12 +119,23 @@ export interface Post {
   status: 'pending' | 'visible' | 'flagged' | 'hidden';
 }
 
+export interface ResourceCategory {
+  id: number;
+  name: string;
+  description: string;
+  order: number;
+  parent: number | null;
+  resource_count: number;
+  children_count: number;
+}
+
 export interface Resource {
   id: number;
   title: string;
   description: string;
   resource_type: 'document' | 'link' | 'video';
   category: number | null;
+  category_name: string | null;
   file: string | null;
   url: string;
   audience: 'all' | 'scholar' | 'mentor' | 'sponsor' | 'admin';

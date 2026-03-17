@@ -93,6 +93,7 @@ class MassMessage(models.Model):
     sender = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='mass_messages_sent')
     subject = models.CharField(max_length=255)
     body = models.TextField()
+    recipient_programmes = models.ManyToManyField('cohorts.Programme', blank=True)
     recipient_cohorts = models.ManyToManyField('cohorts.Cohort', blank=True)
     recipient_roles = models.JSONField(default=list, blank=True, help_text='List of role slugs')
     sent_at = models.DateTimeField(null=True, blank=True)

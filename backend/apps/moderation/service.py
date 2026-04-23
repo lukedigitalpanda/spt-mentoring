@@ -68,7 +68,7 @@ def _email_glob_to_regex(term: str) -> re.Pattern:
     '*@hotmail.com'  →  [\\w.+-]+@hotmail\\.com
     '*@*'            →  general email shape
     '@'              →  general email shape
-    '@gmail.com'     →  r'[\w.+-]+@gmail\.com'
+    '@gmail.com'     →  [\\w.+-]+@gmail\\.com
     """
     generic_email = re.compile(r'[\w.+\-]+@[\w.\-]+\.[a-z]{2,}', re.IGNORECASE)
 

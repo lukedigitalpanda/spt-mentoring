@@ -13,6 +13,7 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=lambda v: [s.strip() for s in v.split(',')])
 
 INSTALLED_APPS = [
+    'jazzmin',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -265,4 +266,169 @@ LOGGING = {
         'django': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
         'apps.moderation': {'handlers': ['console', 'file'], 'level': 'WARNING', 'propagate': False},
     },
+}
+
+# ── Jazzmin admin theme ───────────────────────────────────────────────────────
+JAZZMIN_SETTINGS = {
+    # ── Branding ──────────────────────────────────────────────────────────────
+    "site_title": "SPT Mentoring Admin",
+    "site_header": "SPT Mentoring",
+    "site_brand": "Mentoring",
+    "site_logo": "admin/img/sptlogo.webp",
+    "login_logo": "admin/img/sptlogo.webp",
+    "login_logo_dark": "admin/img/sptlogo.webp",
+    "site_logo_classes": None,
+    "site_icon": None,
+    "welcome_sign": "Helping young people become future engineers",
+    "copyright": "Smallpeice Trust",
+
+    # ── Search ────────────────────────────────────────────────────────────────
+    "search_model": ["users.User"],
+    "user_avatar": None,
+
+    # ── Top menu ──────────────────────────────────────────────────────────────
+    "topmenu_links": [
+        {"name": "Dashboard", "url": "admin:index", "permissions": ["auth.view_user"]},
+        {"name": "View Site", "url": "https://mentoring.smallpeice.online", "new_window": True},
+        {"app": "users"},
+    ],
+
+    # ── User dropdown ─────────────────────────────────────────────────────────
+    "usermenu_links": [
+        {"name": "View Site", "url": "https://mentoring.smallpeice.online", "new_window": True},
+        {"model": "users.User"},
+    ],
+
+    # ── Sidebar nav ───────────────────────────────────────────────────────────
+    "show_sidebar": True,
+    "navigation_expanded": True,
+    "hide_apps": ["auth", "guardian"],
+    "hide_models": [],
+
+    # Order sidebar sections
+    "order_with_respect_to": [
+        "users",
+        "messaging",
+        "forums",
+        "cohorts",
+        "resources",
+        "news",
+        "surveys",
+        "sessions",
+        "goals",
+        "moderation",
+        "notifications",
+        "reports",
+    ],
+
+    # Custom sidebar links (Matching Wizard, Reports)
+    "custom_links": {
+        "users": [
+            {
+                "name": "Matching Wizard",
+                "url": "admin:users_mentoringmatch_wizard",
+                "icon": "fas fa-magic",
+                "permissions": ["users.add_mentoringmatch"],
+            }
+        ],
+        "reports": [
+            {
+                "name": "Mentoring Report",
+                "url": "/admin/reports/mentoring/",
+                "icon": "fas fa-chart-bar",
+            }
+        ],
+    },
+
+    # ── Model icons ───────────────────────────────────────────────────────────
+    "icons": {
+        "users.User":               "fas fa-user",
+        "users.MentoringMatch":     "fas fa-handshake",
+        "users.ScholarProfile":     "fas fa-graduation-cap",
+        "users.MentorProfile":      "fas fa-chalkboard-teacher",
+        "users.SponsorProfile":     "fas fa-building",
+        "users.MentorWaitingList":  "fas fa-clock",
+        "messaging.Conversation":   "fas fa-comments",
+        "messaging.Message":        "fas fa-envelope",
+        "messaging.AbuseReport":    "fas fa-flag",
+        "messaging.MassMessage":    "fas fa-bullhorn",
+        "forums.Forum":             "fas fa-layer-group",
+        "forums.Thread":            "fas fa-list-ul",
+        "forums.Post":              "fas fa-comment-alt",
+        "cohorts.Programme":        "fas fa-project-diagram",
+        "cohorts.Cohort":           "fas fa-users",
+        "cohorts.CohortMembership": "fas fa-user-check",
+        "cohorts.SiteSettings":     "fas fa-cog",
+        "resources.ResourceCategory": "fas fa-folder",
+        "resources.Resource":       "fas fa-file-alt",
+        "resources.SharedDocument": "fas fa-file-upload",
+        "news.NewsItem":            "fas fa-newspaper",
+        "news.PromotionalBanner":   "fas fa-ad",
+        "surveys.Survey":           "fas fa-poll",
+        "surveys.Question":         "fas fa-question-circle",
+        "surveys.SurveyResponse":   "fas fa-check-square",
+        "sessions.AvailabilitySlot": "fas fa-calendar",
+        "sessions.MentoringSession": "fas fa-calendar-check",
+        "sessions.SessionFeedback": "fas fa-star",
+        "goals.Goal":               "fas fa-bullseye",
+        "goals.GoalMilestone":      "fas fa-flag-checkered",
+        "moderation.ModerationTerm": "fas fa-filter",
+        "moderation.BlockedTerm":   "fas fa-ban",
+        "moderation.FlaggedTerm":   "fas fa-exclamation-triangle",
+        "moderation.ModerationLog": "fas fa-clipboard-list",
+        "notifications.Notification": "fas fa-bell",
+    },
+    "default_icon_parents": "fas fa-chevron-circle-right",
+    "default_icon_children": "fas fa-circle",
+
+    # ── Related modal ─────────────────────────────────────────────────────────
+    "related_modal_active": False,
+
+    # ── Custom assets ─────────────────────────────────────────────────────────
+    "custom_css": "admin/css/jazzmin.css",
+    "custom_js": None,
+    "use_google_fonts_cdn": True,
+
+    # ── Change form layout ────────────────────────────────────────────────────
+    "show_ui_builder": False,
+    "changeform_format": "horizontal_tabs",
+    "changeform_format_overrides": {
+        "users.user": "collapsible",
+        "users.scholarprofile": "collapsible",
+        "users.mentorprofile": "collapsible",
+    },
+    "language_chooser": False,
+}
+
+JAZZMIN_UI_TWEAKS = {
+    "navbar_small_text": False,
+    "footer_small_text": True,
+    "body_small_text": False,
+    "brand_small_text": False,
+    "brand_colour": False,
+    "accent": "accent-purple",
+    "navbar": "navbar-dark",
+    "no_navbar_border": True,
+    "navbar_fixed": True,
+    "layout_boxed": False,
+    "footer_fixed": False,
+    "sidebar_fixed": True,
+    "sidebar": "sidebar-dark-primary",
+    "sidebar_nav_small_text": False,
+    "sidebar_disable_expand": False,
+    "sidebar_nav_child_indent": True,
+    "sidebar_nav_compact_style": False,
+    "sidebar_nav_legacy_style": False,
+    "sidebar_nav_flat_style": False,
+    "theme": "default",
+    "dark_mode_theme": None,
+    "button_classes": {
+        "primary": "btn-primary",
+        "secondary": "btn-outline-secondary",
+        "info": "btn-info",
+        "warning": "btn-warning",
+        "danger": "btn-danger",
+        "success": "btn-success",
+    },
+    "actions_sticky_top": True,
 }

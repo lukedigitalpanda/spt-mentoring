@@ -155,7 +155,12 @@ function SessionCard({ session, currentUserId, onAction }: {
   const [showFeedback, setShowFeedback] = useState(false);
   const isMentor = session.mentor === currentUserId;
   const alreadyFeedback = session.feedback.some(f => f.from_user === currentUserId);
-  const isUpcoming = new Date(session.start_time) > new Date();
+  const now = new Date();
+  const sessionStart = new Date(session.start_time);
+  const sessionEnd = new Date(session.end_time);
+  const isUpcoming = sessionStart > now;
+  // Join button is available from 5 min before start until the session ends.
+  const isJoinable = sessionStart.getTime() - 5 * 60_000 <= now.getTime() && sessionEnd > now;
 
   return (
     <div className="bg-white rounded-2xl shadow-card p-5">
@@ -185,7 +190,7 @@ function SessionCard({ session, currentUserId, onAction }: {
           )}
 
           <div className="flex items-center gap-2 flex-wrap border-t border-purple-50 pt-3">
-            {session.status === 'confirmed' && isUpcoming && session.meeting_url && (
+            {session.status === 'confirmed' && isJoinable && session.meeting_url && (
               <a href={session.meeting_url} target="_blank" rel="noopener noreferrer"
                 className="text-xs font-semibold bg-gradient-brand text-white px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity flex items-center gap-1">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -667,8 +672,14 @@ export default function SessionsPage() {
   });
 
   const now = new Date();
-  const upcoming = sessions?.results?.filter(s => new Date(s.start_time) >= now && s.status !== 'cancelled') ?? [];
-  const past     = sessions?.results?.filter(s => new Date(s.start_time) < now || s.status === 'completed' || s.status === 'cancelled') ?? [];
+  // Keep a session in "Upcoming" until its end_time passes, so the join button
+  // remains accessible while the session is in progress.
+  const upcoming = sessions?.results?.filter(s =>
+    new Date(s.end_time) >= now && s.status !== 'cancelled' && s.status !== 'completed'
+  ) ?? [];
+  const past = sessions?.results?.filter(s =>
+    new Date(s.end_time) < now || s.status === 'completed' || s.status === 'cancelled'
+  ) ?? [];
 
   const isMentor = user?.role === 'mentor';
   const tabs = [

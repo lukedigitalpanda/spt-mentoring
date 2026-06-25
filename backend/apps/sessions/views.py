@@ -153,6 +153,21 @@ class MentoringSessionViewSet(viewsets.ModelViewSet):
             )
         return Response(MentoringSessionSerializer(session).data)
 
+    @action(detail=True, methods=['get'])
+    def join(self, request, pk=None):
+        session = self.get_object()
+        user = request.user
+        if user not in (session.mentor, session.scholar) and not (user.is_staff or user.role == 'admin'):
+            return Response({'error': 'Not authorised.'}, status=status.HTTP_403_FORBIDDEN)
+        if not session.is_joinable:
+            return Response(
+                {'error': 'This session is not open to join right now.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        from .jaas import build_join_url, is_configured
+        url = build_join_url(session, user) if is_configured() else session.meeting_url
+        return Response({'url': url})
+
 
 class SessionFeedbackViewSet(viewsets.ModelViewSet):
     serializer_class = SessionFeedbackSerializer

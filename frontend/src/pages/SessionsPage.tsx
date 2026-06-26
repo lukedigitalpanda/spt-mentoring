@@ -156,6 +156,10 @@ function SessionCard({ session, currentUserId, onAction }: {
   const isMentor = session.mentor === currentUserId;
   const alreadyFeedback = session.feedback.some(f => f.from_user === currentUserId);
   const isUpcoming = new Date(session.start_time) > new Date();
+  const isJoinable =
+    new Date(session.start_time).getTime() - 5 * 60_000 <= Date.now() &&
+    new Date(session.end_time) > new Date();
+  const [joining, setJoining] = useState(false);
 
   return (
     <div className="bg-white rounded-2xl shadow-card p-5">
@@ -185,14 +189,27 @@ function SessionCard({ session, currentUserId, onAction }: {
           )}
 
           <div className="flex items-center gap-2 flex-wrap border-t border-purple-50 pt-3">
-            {session.status === 'confirmed' && isUpcoming && session.meeting_url && (
-              <a href={session.meeting_url} target="_blank" rel="noopener noreferrer"
-                className="text-xs font-semibold bg-gradient-brand text-white px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity flex items-center gap-1">
+            {session.status === 'confirmed' && isJoinable && (
+              <button
+                type="button"
+                disabled={joining}
+                onClick={async () => {
+                  setJoining(true);
+                  try {
+                    const { data } = await api.get(`/sessions/sessions/${session.id}/join/`);
+                    window.open(data.url, '_blank', 'noopener,noreferrer');
+                  } catch {
+                    alert('Could not start the video call. Please try again in a moment.');
+                  } finally {
+                    setJoining(false);
+                  }
+                }}
+                className="text-xs font-semibold bg-gradient-brand text-white px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity flex items-center gap-1 disabled:opacity-60">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
-                Join Jitsi call
-              </a>
+                {joining ? 'Starting…' : 'Join video call'}
+              </button>
             )}
             {isMentor && session.status === 'pending' && (
               <>

@@ -220,6 +220,13 @@ VAPID_PRIVATE_KEY = config('VAPID_PRIVATE_KEY', default='')
 VAPID_PUBLIC_KEY = config('VAPID_PUBLIC_KEY', default='')
 VAPID_ADMIN_EMAIL = config('VAPID_ADMIN_EMAIL', default='admin@spt.org')
 
+# --- JaaS (8x8) video calls ---
+JAAS_APP_ID = config('JAAS_APP_ID', default='')
+JAAS_KID = config('JAAS_KID', default='')
+# Private key is stored single-line in .env with literal \n; restore real newlines.
+JAAS_PRIVATE_KEY = config('JAAS_PRIVATE_KEY', default='').replace('\\n', '\n')
+JAAS_ENABLED = bool(JAAS_APP_ID and JAAS_KID and JAAS_PRIVATE_KEY)
+
 # Mentoring-specific settings
 MENTORING_FROM_EMAIL = config('MENTORING_FROM_EMAIL', default='mentoring@spt.org')
 SCHOLARSHIPS_FROM_EMAIL = config('SCHOLARSHIPS_FROM_EMAIL', default='scholarships@spt.org')

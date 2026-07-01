@@ -41,25 +41,93 @@ the Moderation section and are reloaded fresh on every screen() call.
 
 ModerationTerm extension
 ────────────────────────
-The service also checks the ModerationTerm table, which is populated by the
-import_moderation_terms management command.  Severity maps to action:
+The service also checks the ModerationTerm table (text rules + emoji rules).
 
-  CRITICAL / HIGH  → blocked  (same outcome as a BlockedTerm hit)
-  MEDIUM           → flagged  (same outcome as a FlaggedTerm hit)
-  LOW              → delivered, ModerationLog entry written (soft warn only)
+Text rule severity → score:
+  CRITICAL → 100   HIGH → 80   MEDIUM → 50   LOW → 20
 
-ModerationTerm patterns (regex, wildcard, email, etc.) are compiled once and
-cached at the class level.  Call ModerationService.invalidate_cache() to force
-a rebuild — the import command does this automatically after each run.
+Emoji rule type + severity → score:
+  EMOJI_COMBO HIGH/MEDIUM  → 80/50
+  EMOJI_OR_SET HIGH/MEDIUM → 60/40
+  EMOJI_SINGLE HIGH        → 30
+  EMOJI_SINGLE MEDIUM      → 15
+  EMOJI_SINGLE LOW         → 5
+
+Score boosts:
+  Any text rule + any emoji rule fire on the same message → +20
+
+Score → action:
+  ≥ 80   → BLOCKED + admin alert
+  50–79  → FLAGGED (held for review)
+  20–49  → DELIVERED, logged for admin review queue
+  < 20   → DELIVERED, audit-log only
+
+Emoji matching is grapheme-cluster-aware.  Skin-tone modifiers and variation
+selectors are stripped before comparison so 🍆🏿 matches a 🍆 rule.
+
+Cache invalidation:
+  Call ModerationService.invalidate_cache() to force a full rebuild.
+  The import commands do this automatically after each run.
 """
+import itertools
 import re
 import logging
+from dataclasses import dataclass, field
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from .models import BlockedTerm, FlaggedTerm, ModerationLog, ModerationTerm
 
 logger = logging.getLogger('apps.moderation')
 
+EMOJI_COMBO_PROXIMITY: int = getattr(settings, 'EMOJI_COMBO_PROXIMITY', 10)
+
+
+# ---------------------------------------------------------------------------
+# ModerationResult — public return type of screen()
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ModerationResult:
+    status: str                           # 'delivered' | 'flagged' | 'blocked'
+    triggered_term: str = ''              # first matched term (backwards-compat)
+    triggered_rules: list = field(default_factory=list)
+    max_severity: str = ''
+    emoji_only_hit: bool = False          # True if only emoji rules fired
+    single_emoji_only: bool = False       # True if only EMOJI_SINGLE rules fired
+    score: int = 0
+    note: str = ''                        # human-readable moderation note for the record
+
+
+# ---------------------------------------------------------------------------
+# Contact-detail detection — shared by direct messages and forum posts.
+#
+# Contact details (email, bare '@', UK mobile/landline, international numbers)
+# are HELD for admin review, never auto-blocked.  This is the same ruleset the
+# forum contact check (FOR-02) uses; keeping it in one place guarantees forum
+# posts and messages behave identically (MSG-04 / FOR-02 alignment).
+# ---------------------------------------------------------------------------
+
+_CONTACT_PATTERNS = [
+    (re.compile(r'[\w.+\-]+@[\w.\-]+\.[a-z]{2,}', re.IGNORECASE), 'email address'),
+    (re.compile(r'@'),                                               'contact detail (@)'),
+    (re.compile(r'\b07\d{3}[\s\-.]?\d{3}[\s\-.]?\d{3}\b'),           'phone number'),
+    (re.compile(r'\b(\+44|0[1-9]\d)[\s\-.]?\d{3,4}[\s\-.]?\d{4,6}\b'), 'phone number'),
+    (re.compile(r'\+\d{1,4}[\s\-.]?\d{6,14}'),                       'phone number'),
+]
+
+
+def detect_contact_detail(text: str) -> str | None:
+    """Return a moderation note if the text shares a contact detail, else None."""
+    for pattern, label in _CONTACT_PATTERNS:
+        if pattern.search(text):
+            return f'Flagged: contains {label}'
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Text pattern compilation helpers
+# ---------------------------------------------------------------------------
 
 def _email_glob_to_regex(term: str) -> re.Pattern:
     """
@@ -75,26 +143,24 @@ def _email_glob_to_regex(term: str) -> re.Pattern:
     if term in ('@', '*@*'):
         return generic_email
 
-    # '*@domain.tld' or '@domain.tld'
     if term.startswith('*@') or term.startswith('@'):
         domain_part = term.lstrip('*').lstrip('@')
         if domain_part:
             return re.compile(r'[\w.+\-]+@' + re.escape(domain_part), re.IGNORECASE)
         return generic_email
 
-    # Fallback — treat literal @ as generic email shape
     return generic_email
 
 
 def _compile_term_pattern(term: str, match_type: str) -> re.Pattern | None:
-    """Compile and return a regex Pattern for the given term and match_type."""
+    """Compile and return a regex Pattern for the given term and match_type.
+    Returns None for emoji match types (handled separately)."""
     try:
         if match_type == ModerationTerm.MatchType.EXACT:
             return re.compile(r'(?i)\b' + re.escape(term) + r'\b')
         elif match_type == ModerationTerm.MatchType.SUBSTRING:
             return re.compile(re.escape(term), re.IGNORECASE)
         elif match_type == ModerationTerm.MatchType.WILDCARD:
-            # Replace * with .* (escape everything else first)
             escaped = re.escape(term).replace(r'\*', '.*')
             return re.compile(escaped, re.IGNORECASE)
         elif match_type == ModerationTerm.MatchType.REGEX:
@@ -103,15 +169,132 @@ def _compile_term_pattern(term: str, match_type: str) -> re.Pattern | None:
             return _email_glob_to_regex(term)
         elif match_type == ModerationTerm.MatchType.URL_FRAGMENT:
             return re.compile(re.escape(term), re.IGNORECASE)
+        # EMOJI_* types are handled by the emoji rule cache — return None here.
     except re.error:
         logger.warning('ModerationTerm: invalid pattern skipped — term=%r match_type=%s', term, match_type)
     return None
 
 
-class ModerationResult:
-    def __init__(self, status, triggered_term=''):
-        self.status = status          # 'delivered' | 'flagged' | 'blocked'
-        self.triggered_term = triggered_term
+# ---------------------------------------------------------------------------
+# Scoring
+# ---------------------------------------------------------------------------
+
+_SEVERITY_ORDER = {
+    ModerationTerm.Severity.CRITICAL: 4,
+    ModerationTerm.Severity.HIGH: 3,
+    ModerationTerm.Severity.MEDIUM: 2,
+    ModerationTerm.Severity.LOW: 1,
+    '': 0,
+}
+
+
+def compute_score(text_hits: list[dict], emoji_hits: list[dict]) -> int:
+    """
+    Compute a numeric moderation risk score from collected rule hits.
+
+    text_hits and emoji_hits are lists of rule-hit dicts, each containing at
+    least {'severity': ..., 'match_type': ...}.
+
+    This is a plain function so it can be unit-tested without a message object.
+    """
+    score = 0
+
+    for hit in text_hits:
+        sev = hit.get('severity', '')
+        if sev == ModerationTerm.Severity.CRITICAL:
+            score += 100
+        elif sev == ModerationTerm.Severity.HIGH:
+            score += 80
+        elif sev == ModerationTerm.Severity.MEDIUM:
+            score += 50
+        elif sev == ModerationTerm.Severity.LOW:
+            score += 20
+
+    for hit in emoji_hits:
+        mt = hit.get('match_type', '')
+        sev = hit.get('severity', '')
+
+        if mt == ModerationTerm.MatchType.EMOJI_COMBO:
+            if sev == ModerationTerm.Severity.HIGH:
+                score += 80
+            elif sev == ModerationTerm.Severity.MEDIUM:
+                score += 50
+            else:
+                score += 20
+
+        elif mt == ModerationTerm.MatchType.EMOJI_OR_SET:
+            if sev in (ModerationTerm.Severity.HIGH, ModerationTerm.Severity.CRITICAL):
+                score += 60
+            elif sev == ModerationTerm.Severity.MEDIUM:
+                score += 40
+            else:
+                score += 10
+
+        elif mt == ModerationTerm.MatchType.EMOJI_SINGLE:
+            if sev == ModerationTerm.Severity.HIGH:
+                score += 30
+            elif sev == ModerationTerm.Severity.MEDIUM:
+                score += 15
+            else:
+                score += 5
+
+    # Cross-signal boost: text + emoji together on one message.
+    if text_hits and emoji_hits:
+        score += 20
+
+    return score
+
+
+def _max_severity(hits: list[dict]) -> str:
+    """Return the highest severity string from a list of hit dicts."""
+    best = ''
+    best_rank = 0
+    for hit in hits:
+        sev = hit.get('severity', '')
+        rank = _SEVERITY_ORDER.get(sev, 0)
+        if rank > best_rank:
+            best_rank = rank
+            best = sev
+    return best
+
+
+# ---------------------------------------------------------------------------
+# Emoji proximity check
+# ---------------------------------------------------------------------------
+
+def _combo_fires(emoji_list: list[str], combo_parts: list[str], proximity: int) -> bool:
+    """
+    Return True if every element of *combo_parts* appears in *emoji_list* AND
+    the maximum index-distance between any two parts is ≤ *proximity*.
+    """
+    if not combo_parts:
+        return False
+    positions: dict[str, list[int]] = {}
+    for part in combo_parts:
+        idxs = [i for i, e in enumerate(emoji_list) if e == part]
+        if not idxs:
+            return False
+        positions[part] = idxs
+
+    for combo in itertools.product(*positions.values()):
+        if max(combo) - min(combo) <= proximity:
+            return True
+    return False
+
+
+# ---------------------------------------------------------------------------
+# ModerationService
+# ---------------------------------------------------------------------------
+
+def build_moderation_alert(sender_name, sender_email, triggered_term, admin_url, message_pk):
+    subject = f'[SPT Moderation] Flagged message requires review (#{message_pk})'
+    body = (
+        f'A message has been flagged for review.\n\n'
+        f'Sender:       {sender_name} ({sender_email})\n'
+        f'Triggered by: "{triggered_term}"\n'
+        f'Review it here: {admin_url}\n'
+    )
+    return subject, body
 
 
 class ModerationService:
@@ -119,11 +302,14 @@ class ModerationService:
     _blocked_terms_cache = None
     _flagged_terms_cache = None
 
-    # Compiled ModerationTerm pattern cache — built once, invalidated explicitly.
-    # Each list holds (compiled_pattern, term_str) tuples.
-    _mt_block_patterns: list | None = None   # CRITICAL + HIGH → block
-    _mt_flag_patterns: list | None = None    # MEDIUM → flag
-    _mt_low_patterns: list | None = None     # LOW → deliver + log
+    # Compiled ModerationTerm text-pattern cache — built once, invalidated explicitly.
+    _mt_block_patterns: list | None = None
+    _mt_flag_patterns: list | None = None
+    _mt_low_patterns: list | None = None
+
+    # Emoji rule cache — list of rule dicts, built once alongside text patterns.
+    # Each entry: {term, match_type, severity, category, combo_parts (COMBO only)}
+    _emoji_rules_cache: list | None = None
 
     @classmethod
     def invalidate_cache(cls):
@@ -133,6 +319,7 @@ class ModerationService:
         cls._mt_block_patterns = None
         cls._mt_flag_patterns = None
         cls._mt_low_patterns = None
+        cls._emoji_rules_cache = None
 
     @classmethod
     def _load_terms(cls):
@@ -146,30 +333,74 @@ class ModerationService:
 
     @classmethod
     def _ensure_moderation_term_patterns(cls):
-        """Build compiled ModerationTerm pattern lists if not already cached."""
+        """Build compiled text-pattern lists and emoji rule cache if not already cached."""
         if cls._mt_block_patterns is not None:
             return
         cls._build_moderation_term_patterns()
 
     @classmethod
     def _build_moderation_term_patterns(cls):
-        """Compile all active ModerationTerm entries into pattern lists, grouped by severity."""
+        """
+        Compile all active ModerationTerm entries into caches.
+
+        Text match types (EXACT, SUBSTRING, WILDCARD, REGEX, EMAIL_PATTERN,
+        URL_FRAGMENT) go into the pattern lists grouped by severity.
+
+        Emoji match types (EMOJI_SINGLE, EMOJI_COMBO, EMOJI_OR_SET) go into
+        the emoji rules cache as structured dicts for grapheme-aware matching.
+        """
+        from .utils.emoji import extract_emoji_graphemes
+
         block_patterns = []
         flag_patterns = []
         low_patterns = []
+        emoji_rules = []
+
+        emoji_types = {
+            ModerationTerm.MatchType.EMOJI_SINGLE,
+            ModerationTerm.MatchType.EMOJI_COMBO,
+            ModerationTerm.MatchType.EMOJI_OR_SET,
+        }
 
         rows = ModerationTerm.objects.filter(is_active=True).values(
-            'term', 'match_type', 'severity'
+            'term', 'match_type', 'severity', 'category'
         )
         for row in rows:
-            pattern = _compile_term_pattern(row['term'], row['match_type'])
+            mt = row['match_type']
+            if mt in emoji_types:
+                rule = {
+                    'term': row['term'],
+                    'match_type': mt,
+                    'severity': row['severity'],
+                    'category': row['category'],
+                }
+                if mt == ModerationTerm.MatchType.EMOJI_COMBO:
+                    # Pre-split combo pattern into individual emoji for proximity matching.
+                    rule['combo_parts'] = extract_emoji_graphemes(row['term'])
+                emoji_rules.append(rule)
+                continue
+
+            # Contact details (email/@ patterns) are handled by the shared
+            # detect_contact_detail() check, which always HOLDS them for review
+            # rather than blocking (MSG-04).  Skip them here so a HIGH-severity
+            # EMAIL_PATTERN term can never push a message onto the block path.
+            if mt == ModerationTerm.MatchType.EMAIL_PATTERN:
+                continue
+
+            pattern = _compile_term_pattern(row['term'], mt)
             if pattern is None:
                 continue
-            entry = (pattern, row['term'])
-            severity = row['severity']
-            if severity in (ModerationTerm.Severity.CRITICAL, ModerationTerm.Severity.HIGH):
+
+            sev = row['severity']
+            # Shared links (URL fragments) are likewise contact-leak signals and
+            # are HELD for review, not auto-blocked — force them to the flag tier.
+            if mt == ModerationTerm.MatchType.URL_FRAGMENT:
+                sev = ModerationTerm.Severity.MEDIUM
+
+            entry = (pattern, row['term'], sev)
+            if sev in (ModerationTerm.Severity.CRITICAL, ModerationTerm.Severity.HIGH):
                 block_patterns.append(entry)
-            elif severity == ModerationTerm.Severity.MEDIUM:
+            elif sev == ModerationTerm.Severity.MEDIUM:
                 flag_patterns.append(entry)
             else:
                 low_patterns.append(entry)
@@ -177,15 +408,87 @@ class ModerationService:
         cls._mt_block_patterns = block_patterns
         cls._mt_flag_patterns = flag_patterns
         cls._mt_low_patterns = low_patterns
+        cls._emoji_rules_cache = emoji_rules
         logger.info(
-            'ModerationTerm cache built: %d block, %d flag, %d low patterns',
-            len(block_patterns), len(flag_patterns), len(low_patterns),
+            'ModerationTerm cache built: %d block, %d flag, %d low text patterns; %d emoji rules',
+            len(block_patterns), len(flag_patterns), len(low_patterns), len(emoji_rules),
         )
+
+    @classmethod
+    def _collect_text_hits(cls, text: str) -> list[dict]:
+        """Return all matching text-rule hits as dicts with term/severity."""
+        hits = []
+        for patterns_list in (cls._mt_block_patterns, cls._mt_flag_patterns, cls._mt_low_patterns):
+            for compiled, term_str, severity in patterns_list:
+                if compiled.search(text):
+                    hits.append({
+                        'term': term_str,
+                        'match_type': 'text',
+                        'severity': severity,
+                        'source': 'text',
+                    })
+        return hits
+
+    @classmethod
+    def _collect_emoji_hits(cls, text: str) -> list[dict]:
+        """Return all matching emoji-rule hits, grapheme-cluster-aware."""
+        from .utils.emoji import extract_emoji_graphemes, normalise_emoji
+
+        if not cls._emoji_rules_cache:
+            return []
+
+        # Build normalised emoji list once for this message.
+        raw_clusters = extract_emoji_graphemes(text)
+        norm_list = [normalise_emoji(g) for g in raw_clusters]
+        if not norm_list:
+            return []
+
+        norm_seq = ''.join(norm_list)
+
+        hits = []
+        proximity = EMOJI_COMBO_PROXIMITY
+
+        for rule in cls._emoji_rules_cache:
+            mt = rule['match_type']
+            pattern = rule['term']  # normalised pattern stored at import time
+
+            if mt == ModerationTerm.MatchType.EMOJI_SINGLE:
+                if pattern in norm_seq:
+                    hits.append({
+                        'term': pattern,
+                        'match_type': mt,
+                        'severity': rule['severity'],
+                        'category': rule['category'],
+                        'source': 'emoji',
+                    })
+
+            elif mt == ModerationTerm.MatchType.EMOJI_OR_SET:
+                if pattern in norm_seq:
+                    hits.append({
+                        'term': pattern,
+                        'match_type': mt,
+                        'severity': rule['severity'],
+                        'category': rule['category'],
+                        'source': 'emoji',
+                    })
+
+            elif mt == ModerationTerm.MatchType.EMOJI_COMBO:
+                combo_parts = rule.get('combo_parts', [])
+                if combo_parts and _combo_fires(norm_list, combo_parts, proximity):
+                    hits.append({
+                        'term': pattern,
+                        'match_type': mt,
+                        'severity': rule['severity'],
+                        'category': rule['category'],
+                        'source': 'emoji',
+                    })
+
+        return hits
 
     @classmethod
     def _match_patterns(cls, text: str, patterns: list) -> str:
         """Return the term string of the first matching pattern, or ''."""
-        for compiled, term_str in patterns:
+        for compiled, term_str, *_ in patterns:
             if compiled.search(text):
                 return term_str
         return ''
@@ -201,98 +504,153 @@ class ModerationService:
         return ''
 
     @classmethod
+    def screen_text(cls, body: str) -> ModerationResult:
+        """
+        Screen a raw text body and return a ModerationResult WITHOUT touching any
+        model.  Shared by direct messages (screen()) and forum posts so both
+        behave identically.
+
+        Decision order:
+          1. Legacy BlockedTerm           → blocked (stops delivery; MOD-04)
+          2. ModerationTerm score ≥ 80    → blocked (genuine block-tier content)
+          3. Contact detail / legacy
+             FlaggedTerm / score ≥ 50     → flagged (held for review; MSG-04/FOR-02)
+          4. score ≥ 20                   → delivered, logged for review queue
+          5. otherwise                    → delivered (audit only)
+
+        Contact details (email, bare '@', phone numbers) are detected by the
+        shared detect_contact_detail() check and are always HELD, never blocked.
+        """
+        cls._load_terms()
+        cls._ensure_moderation_term_patterns()
+
+        # 1. Legacy BlockedTerm — immediate block.
+        blocked_hit = cls._contains_term(body, cls._blocked_terms_cache)
+        if blocked_hit:
+            return ModerationResult(
+                status='blocked', triggered_term=blocked_hit, score=100,
+                max_severity=ModerationTerm.Severity.CRITICAL,
+                note=f'Blocked: matched term "{blocked_hit}"',
+            )
+
+        # 2. Collect ModerationTerm hits (text + emoji) and score together.
+        text_hits = cls._collect_text_hits(body)
+        emoji_hits = cls._collect_emoji_hits(body)
+        all_hits = text_hits + emoji_hits
+        score = compute_score(text_hits, emoji_hits)
+        max_sev = _max_severity(all_hits)
+        emoji_only = bool(emoji_hits) and not bool(text_hits)
+        single_only = emoji_only and all(
+            h['match_type'] == ModerationTerm.MatchType.EMOJI_SINGLE for h in emoji_hits
+        )
+        first_term = all_hits[0]['term'] if all_hits else ''
+
+        # Genuine block-tier content stops delivery outright.
+        if score >= 80:
+            return ModerationResult(
+                status='blocked', triggered_term=first_term, triggered_rules=all_hits,
+                max_severity=max_sev, emoji_only_hit=emoji_only,
+                single_emoji_only=single_only, score=score,
+                note=f'Blocked: score={score}, term="{first_term}"',
+            )
+
+        # 3. Contact details and legacy FlaggedTerm hits are HELD for review.
+        contact_note = detect_contact_detail(body)
+        flagged_hit = cls._contains_term(body, cls._flagged_terms_cache)
+
+        if score >= 50 or contact_note or flagged_hit:
+            if contact_note and score < 50 and not flagged_hit:
+                note = contact_note
+                triggered = contact_note
+                sev = ModerationTerm.Severity.MEDIUM
+            elif flagged_hit and score < 50:
+                note = f'Flagged: matched term "{flagged_hit}"'
+                triggered = flagged_hit
+                sev = ModerationTerm.Severity.MEDIUM
+            else:
+                note = f'Flagged: score={score}, term="{first_term}"'
+                triggered = first_term
+                sev = max_sev or ModerationTerm.Severity.MEDIUM
+            return ModerationResult(
+                status='flagged', triggered_term=triggered, triggered_rules=all_hits,
+                max_severity=sev, emoji_only_hit=emoji_only,
+                single_emoji_only=single_only, score=max(score, 50), note=note,
+            )
+
+        # 4/5. Lower scores deliver (review queue or audit only).
+        if all_hits:
+            queue = score >= 20
+            return ModerationResult(
+                status='delivered', triggered_term=first_term, triggered_rules=all_hits,
+                max_severity=max_sev, emoji_only_hit=emoji_only,
+                single_emoji_only=single_only, score=score,
+                note=(f'score={score} — delivered, queued for review' if queue
+                      else f'score={score} — delivered, audit log only'),
+            )
+        return ModerationResult(status='delivered', score=0)
+
+    @classmethod
     def screen(cls, message) -> ModerationResult:
         """
-        Screen a Message instance.
-        Updates the message status and creates a ModerationLog entry.
-        Returns a ModerationResult.
+        Screen a Message instance: delegate the decision to screen_text(), then
+        apply the resulting status, write a ModerationLog entry and dispatch the
+        sender/staff notifications.
         """
         from apps.messaging.models import Message
 
-        cls._load_terms()
-        cls._ensure_moderation_term_patterns()
-        body = message.body
-
-        # 1. Check legacy BlockedTerm list
-        blocked_hit = cls._contains_term(body, cls._blocked_terms_cache)
-        if blocked_hit:
-            message.status = Message.Status.BLOCKED
-            message.moderation_note = f'Blocked: matched term "{blocked_hit}"'
-            message.save(update_fields=['status', 'moderation_note'])
-            ModerationLog.objects.create(
-                message=message,
-                action=ModerationLog.Action.BLOCKED,
-                triggered_term=blocked_hit,
+        try:
+            result = cls.screen_text(message.body)
+        except Exception:
+            logger.exception(
+                'Moderation pipeline error on message #%d — held for admin review',
+                message.pk,
             )
-            logger.warning('Message #%d blocked – term: %s', message.pk, blocked_hit)
-            cls._notify_sender_blocked(message, reason='')
-            return ModerationResult('blocked', blocked_hit)
-
-        # 2. Check legacy FlaggedTerm list
-        flagged_hit = cls._contains_term(body, cls._flagged_terms_cache)
-        if flagged_hit:
             message.status = Message.Status.FLAGGED
-            message.moderation_note = f'Flagged: matched term "{flagged_hit}"'
+            message.moderation_note = 'Pipeline error — held for admin review'
             message.save(update_fields=['status', 'moderation_note'])
-            ModerationLog.objects.create(
-                message=message,
-                action=ModerationLog.Action.FLAGGED,
-                triggered_term=flagged_hit,
-            )
-            logger.warning('Message #%d flagged – term: %s', message.pk, flagged_hit)
-            cls._alert_staff(message, flagged_hit)
-            cls._notify_sender_flagged(message)
-            return ModerationResult('flagged', flagged_hit)
+            return ModerationResult(status='flagged', score=0)
 
-        # 3. Check ModerationTerm block patterns (CRITICAL + HIGH severity)
-        mt_block_hit = cls._match_patterns(body, cls._mt_block_patterns)
-        if mt_block_hit:
+        triggered = result.triggered_term
+
+        if result.status == 'blocked':
             message.status = Message.Status.BLOCKED
-            message.moderation_note = f'Blocked: matched term "{mt_block_hit}"'
+            message.moderation_note = result.note
             message.save(update_fields=['status', 'moderation_note'])
             ModerationLog.objects.create(
-                message=message,
-                action=ModerationLog.Action.BLOCKED,
-                triggered_term=mt_block_hit,
+                message=message, action=ModerationLog.Action.BLOCKED,
+                triggered_term=triggered, notes=f'score={result.score}',
             )
-            logger.warning('Message #%d blocked (ModerationTerm) – term: %s', message.pk, mt_block_hit)
-            cls._notify_sender_blocked(message, reason='')
-            return ModerationResult('blocked', mt_block_hit)
+            logger.warning('Message #%d blocked (score=%d) – term: %s',
+                           message.pk, result.score, triggered)
+            # Auto-block: do NOT claim a moderator reviewed it (MSG-04).
+            cls._notify_sender_blocked(message, reason='', auto=True)
+            cls._alert_staff(message, triggered)
 
-        # 4. Check ModerationTerm flag patterns (MEDIUM severity)
-        mt_flag_hit = cls._match_patterns(body, cls._mt_flag_patterns)
-        if mt_flag_hit:
+        elif result.status == 'flagged':
             message.status = Message.Status.FLAGGED
-            message.moderation_note = f'Flagged: matched term "{mt_flag_hit}"'
+            message.moderation_note = result.note
             message.save(update_fields=['status', 'moderation_note'])
             ModerationLog.objects.create(
-                message=message,
-                action=ModerationLog.Action.FLAGGED,
-                triggered_term=mt_flag_hit,
+                message=message, action=ModerationLog.Action.FLAGGED,
+                triggered_term=triggered, notes=f'score={result.score}',
             )
-            logger.warning('Message #%d flagged (ModerationTerm) – term: %s', message.pk, mt_flag_hit)
-            cls._alert_staff(message, mt_flag_hit)
+            logger.warning('Message #%d flagged (score=%d) – term: %s',
+                           message.pk, result.score, triggered)
+            cls._alert_staff(message, triggered)
             cls._notify_sender_flagged(message)
-            return ModerationResult('flagged', mt_flag_hit)
 
-        # 5. Check ModerationTerm LOW patterns — deliver but log
-        mt_low_hit = cls._match_patterns(body, cls._mt_low_patterns)
-        if mt_low_hit:
+        else:  # delivered
             message.status = Message.Status.DELIVERED
             message.save(update_fields=['status'])
-            ModerationLog.objects.create(
-                message=message,
-                action=ModerationLog.Action.APPROVED,
-                triggered_term=mt_low_hit,
-                notes='LOW severity — delivered with soft-warn log entry',
-            )
-            logger.info('Message #%d delivered with low-severity log – term: %s', message.pk, mt_low_hit)
-            return ModerationResult('delivered', mt_low_hit)
+            if result.triggered_rules:
+                ModerationLog.objects.create(
+                    message=message, action=ModerationLog.Action.APPROVED,
+                    triggered_term=triggered, notes=result.note,
+                )
+            logger.info('Message #%d delivered (score=%d) – term: %s',
+                        message.pk, result.score, triggered)
 
-        # 6. Passed all checks — deliver
-        message.status = Message.Status.DELIVERED
-        message.save(update_fields=['status'])
-        return ModerationResult('delivered')
+        return result
 
     @classmethod
     def _alert_staff(cls, message, triggered_term):
@@ -305,13 +663,8 @@ class ModerationService:
         admin_url = (
             f'{settings.CSRF_TRUSTED_ORIGINS[0]}/admin/messaging/message/{message.pk}/change/'
         )
-        subject = f'[SPT Moderation] Flagged message requires review (#{message.pk})'
-        body = (
-            f'A message has been flagged for review.\n\n'
-            f'Sender:       {message.sender.full_name} ({message.sender.email})\n'
-            f'Triggered by: "{triggered_term}"\n'
-            f'Preview:      {message.body[:200]}\n\n'
-            f'Review it here: {admin_url}\n'
+        subject, body = build_moderation_alert(
+            message.sender.full_name, message.sender.email, triggered_term, admin_url, message.pk,
         )
 
         staff_users = User.objects.filter(is_active=True).filter(
@@ -345,9 +698,7 @@ class ModerationService:
 
     @classmethod
     def _notify_sender_flagged(cls, message):
-        """M1: Notify the sender that their message is held for moderation review.
-        Creates a persistent in-app Notification so the sender still has feedback
-        after a page refresh (the real-time HTTP/WS response is transient)."""
+        """Notify the sender that their message is held for moderation review."""
         from apps.notifications.models import Notification
         try:
             Notification.objects.create(
@@ -410,30 +761,42 @@ class ModerationService:
             )
         except Exception:
             logger.exception('Failed to create ModerationLog for reject on message #%d', message.pk)
-        # Always notify the sender — must run even if log creation failed above.
         cls._notify_sender_blocked(message, notes)
 
     @classmethod
-    def _notify_sender_blocked(cls, message, reason=''):
+    def _notify_sender_blocked(cls, message, reason='', auto=False):
         """Send an in-app notification AND a conversation system message to the sender
-        explaining why their message was blocked after moderation review."""
+        explaining why their message was blocked.
+
+        ``auto=True`` means the block was an automatic screening decision with no
+        human involvement — in that case we must NOT tell the sender a moderator
+        reviewed it (MSG-04).  ``auto=False`` is used by reject(), where an admin
+        genuinely reviewed and blocked the message.
+        """
         from apps.notifications.models import Notification
-        body = reason.strip() if reason.strip() else (
-            'Your message was reviewed by a moderator and has been permanently blocked.'
-        )
+        if reason.strip():
+            body = reason.strip()
+            title = 'Your message has been blocked by a moderator'
+        elif auto:
+            body = (
+                'Your message could not be delivered because it contains content '
+                'that is not permitted on the platform.'
+            )
+            title = 'Your message could not be delivered'
+        else:
+            body = 'Your message was reviewed by a moderator and has been permanently blocked.'
+            title = 'Your message has been blocked by a moderator'
         try:
             Notification.objects.create(
                 user=message.sender,
                 notification_type=Notification.Type.SYSTEM,
-                title='Your message has been blocked by a moderator',
+                title=title,
                 body=body,
                 link='/messages',
             )
         except Exception:
             logger.exception('Failed to send block notification to sender %d', message.sender_id)
 
-        # Also post a visible system message from Arkwright in the same conversation thread
-        # so the sender sees clear in-chat feedback without needing to check notifications.
         try:
             from apps.users.models import User
             from apps.messaging.models import Message as Msg
@@ -449,10 +812,16 @@ class ModerationService:
                     'is_verified': True,
                 },
             )
-            system_body = (
-                f'⚠️ Your recent message was reviewed by a moderator and could not be delivered. '
-                f'Reason: {body}'
-            )
+            if auto and not reason.strip():
+                system_body = (
+                    'Your recent message could not be delivered because it contains '
+                    'content that is not permitted on the platform.'
+                )
+            else:
+                system_body = (
+                    'Your recent message was reviewed by a moderator and could not be '
+                    f'delivered. Reason: {body}'
+                )
             Msg.objects.create(
                 conversation=message.conversation,
                 sender=arkwright,

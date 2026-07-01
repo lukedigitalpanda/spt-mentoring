@@ -4,6 +4,27 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+NO_CONTACT_REMINDER_SUBJECT = 'SPT Mentoring – Time to connect!'
+SPONSOR_UPDATE_SUBJECT = 'SPT Scholarships – Time to update your sponsor'
+
+
+def build_no_contact_body(first_name):
+    return (
+        f'Hi {first_name},\n\n'
+        'It looks like you and your mentoring partner haven\'t been in touch recently. '
+        'Please log in to the SPT Mentoring Platform and send a message.\n\n'
+        'Best regards,\nSPT Mentoring Team'
+    )
+
+
+def build_sponsor_update_body(first_name, sponsor_name):
+    return (
+        f'Hi {first_name},\n\n'
+        f'Your sponsor {sponsor_name} is due an update from you. '
+        'Please log in to the platform and send them an update on your progress.\n\n'
+        'Best regards,\nSPT Scholarships Team'
+    )
+
 
 @shared_task
 def send_mass_message_task(mass_message_id):
@@ -37,10 +58,15 @@ def send_mass_message_task(mass_message_id):
         arkwright.set_unusable_password()
         arkwright.save()
 
-    # Collect recipients
+    # Collect recipients.
+    # ISS-H: include users where the target role is primary OR secondary.
+    from django.db.models import Q
     qs = User.objects.filter(is_active=True).exclude(pk=arkwright.pk)
     if msg.recipient_roles:
-        qs = qs.filter(role__in=msg.recipient_roles)
+        role_q = Q(role__in=msg.recipient_roles)
+        for r in msg.recipient_roles:
+            role_q |= Q(secondary_roles__contains=r)
+        qs = qs.filter(role_q)
     if msg.recipient_programmes.exists():
         prog_ids = msg.recipient_programmes.values_list('pk', flat=True)
         qs = qs.filter(cohort_memberships__cohort__programme_id__in=prog_ids).distinct()
@@ -58,10 +84,13 @@ def send_mass_message_task(mass_message_id):
         return
 
     for recipient in recipients:
-        # Create a private 1-to-1 conversation between Arkwright and the recipient
+        # Create a private 1-to-1 conversation between Arkwright and the recipient.
+        # replies_enabled is propagated from the MassMessage so that broadcast-only
+        # messages can disable the reply UI for the recipient.
         conv = Conversation.objects.create(
-            conversation_type=Conversation.ConversationType.DIRECT,
+            conversation_type=Conversation.ConversationType.MASS_MESSAGE,
             subject=msg.subject,
+            replies_enabled=msg.replies_enabled,
         )
         conv.participants.add(arkwright, recipient)
 
@@ -132,13 +161,8 @@ def send_no_contact_reminders():
             for user in [match.scholar, match.mentor]:
                 if user.notification_email:
                     send_mail(
-                        subject='SPT Mentoring – Time to connect!',
-                        message=(
-                            f'Hi {user.first_name},\n\n'
-                            'It looks like you and your mentoring partner haven\'t been in touch recently. '
-                            'Please log in to the SPT Mentoring Platform and send a message.\n\n'
-                            'Best regards,\nSPT Mentoring Team'
-                        ),
+                        subject=NO_CONTACT_REMINDER_SUBJECT,
+                        message=build_no_contact_body(user.first_name),
                         from_email=settings.MENTORING_FROM_EMAIL,
                         recipient_list=[user.email],
                         fail_silently=True,
@@ -174,13 +198,8 @@ def send_sponsor_update_reminders():
         if last_update is None or last_update.sent_at < threshold:
             if scholar.notification_email:
                 send_mail(
-                    subject='SPT Scholarships – Time to update your sponsor',
-                    message=(
-                        f'Hi {scholar.first_name},\n\n'
-                        f'Your sponsor {profile.sponsor.full_name} is due an update from you. '
-                        'Please log in to the platform and send them an update on your progress.\n\n'
-                        'Best regards,\nSPT Scholarships Team'
-                    ),
+                    subject=SPONSOR_UPDATE_SUBJECT,
+                    message=build_sponsor_update_body(scholar.first_name, profile.sponsor.full_name),
                     from_email=settings.SCHOLARSHIPS_FROM_EMAIL,
                     recipient_list=[scholar.email],
                     fail_silently=True,

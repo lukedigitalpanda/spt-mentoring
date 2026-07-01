@@ -216,10 +216,20 @@ EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='mentoring@spt.org')
 
+# Notification email debounce (N-3)
+# Emails for message / forum notifications are batched per recipient: held for
+# DEBOUNCE_SECONDS (sliding as new ones arrive) but never longer than
+# MAX_DELAY_SECONDS from when the window first opened.
+NOTIFICATION_EMAIL_DEBOUNCE_SECONDS = config('NOTIFICATION_EMAIL_DEBOUNCE_SECONDS', default=300, cast=int)
+NOTIFICATION_EMAIL_MAX_DELAY_SECONDS = config('NOTIFICATION_EMAIL_MAX_DELAY_SECONDS', default=900, cast=int)
+
 # Web Push / VAPID
 VAPID_PRIVATE_KEY = config('VAPID_PRIVATE_KEY', default='')
 VAPID_PUBLIC_KEY = config('VAPID_PUBLIC_KEY', default='')
 VAPID_ADMIN_EMAIL = config('VAPID_ADMIN_EMAIL', default='admin@spt.org')
+
+# Frontend URL — used in password reset emails
+FRONTEND_URL = config('FRONTEND_URL', default='https://mentoring.smallpeice.online')
 
 # Mentoring-specific settings
 MENTORING_FROM_EMAIL = config('MENTORING_FROM_EMAIL', default='mentoring@spt.org')
@@ -334,7 +344,7 @@ JAZZMIN_SETTINGS = {
         "reports": [
             {
                 "name": "Mentoring Report",
-                "url": "/admin/reports/mentoring/",
+                "url": "/admin/reports/mentoringreport/",
                 "icon": "fas fa-chart-bar",
             }
         ],
@@ -377,6 +387,8 @@ JAZZMIN_SETTINGS = {
         "moderation.FlaggedTerm":   "fas fa-exclamation-triangle",
         "moderation.ModerationLog": "fas fa-clipboard-list",
         "notifications.Notification": "fas fa-bell",
+        "notifications.PushSubscription":  "fas fa-mobile-alt",
+        "notifications.EmailCatalogueEntry": "fas fa-book",
     },
     "default_icon_parents": "fas fa-chevron-circle-right",
     "default_icon_children": "fas fa-circle",
@@ -432,3 +444,11 @@ JAZZMIN_UI_TWEAKS = {
     },
     "actions_sticky_top": True,
 }
+
+
+# --- JaaS (8x8) video calls ---
+JAAS_APP_ID = config('JAAS_APP_ID', default='')
+JAAS_KID = config('JAAS_KID', default='')
+# Private key is stored single-line in .env with literal \n; restore real newlines.
+JAAS_PRIVATE_KEY = config('JAAS_PRIVATE_KEY', default='').replace('\\n', '\n')
+JAAS_ENABLED = bool(JAAS_APP_ID and JAAS_KID and JAAS_PRIVATE_KEY)

@@ -106,3 +106,26 @@ class EmailCatalogueEntry(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class EmailLog(models.Model):
+    """Audit record of an email the system attempted to send (see LoggingEmailBackend)."""
+    class Status(models.TextChoices):
+        SENT = 'sent', _('Sent')
+        FAILED = 'failed', _('Failed')
+
+    to = models.CharField(max_length=500)
+    from_email = models.CharField(max_length=254, blank=True)
+    subject = models.CharField(max_length=500)
+    body = models.TextField(blank=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.SENT)
+    error = models.TextField(blank=True)
+    category = models.CharField(max_length=50, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = 'Email Log'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.created_at:%Y-%m-%d %H:%M} → {self.to} [{self.status}]'

@@ -57,3 +57,15 @@ class LoggingBackendTests(_TC):
         with patch('apps.notifications.models.EmailLog.objects.create', side_effect=Exception('db down')):
             self._backend().send_messages([msg])
         self.assertEqual(len(mail.outbox), 1)          # email still delivered
+
+    @override_settings(LOGGED_EMAIL_BACKEND='config.logging_email_backend._AlwaysFailBackend')
+    def test_silent_caller_failure_still_records_error(self):
+        """fail_silently=True must not swallow a failure silently in the log:
+        status=failed AND error populated, and no exception propagates."""
+        from config.logging_email_backend import LoggingEmailBackend
+        from apps.notifications.models import EmailLog
+        msg = EmailMessage('New message from X', 'b', 'f@x.com', ['t@x.com'])
+        result = LoggingEmailBackend(fail_silently=True).send_messages([msg])  # must NOT raise
+        log = EmailLog.objects.get()
+        self.assertEqual(log.status, 'failed')
+        self.assertTrue(log.error)  # populated, not empty

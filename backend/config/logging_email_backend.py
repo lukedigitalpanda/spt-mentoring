@@ -20,11 +20,13 @@ class LoggingEmailBackend(BaseEmailBackend):
     def __init__(self, fail_silently=False, **kwargs):
         super().__init__(fail_silently=fail_silently)
         inner_path = getattr(settings, 'LOGGED_EMAIL_BACKEND', DEFAULT_INNER)
-        self._inner = import_string(inner_path)(fail_silently=fail_silently, **kwargs)
+        # Construct the inner backend as non-silent so send failures raise into
+        # our except block and get recorded with a populated error. We honour the
+        # caller's fail_silently ourselves in send_messages (re-raise decision).
+        self._inner = import_string(inner_path)(fail_silently=False, **kwargs)
 
     def send_messages(self, email_messages):
         from apps.notifications.models import EmailLog
-        from apps.notifications.email_catalogue import infer_category
 
         if not email_messages:
             return 0

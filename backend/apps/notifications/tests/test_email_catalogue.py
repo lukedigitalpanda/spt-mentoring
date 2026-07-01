@@ -25,3 +25,16 @@ class EmailCatalogueTests(TestCase):
         self.assertEqual(infer_category('Reset your password — Arkwright Mentoring'), 'password_reset')
         self.assertEqual(infer_category('Bob Mentor posted in the forum'), 'scholar_forum_post')
         self.assertEqual(infer_category('Some random admin broadcast'), '')
+
+    def test_infer_category_matches_catalogue_subjects(self):
+        """Drift guard: every catalogue subject (except the admin-authored mass
+        message) must classify back to its own key, so a future subject-wording
+        change can't silently break Email Log categorisation."""
+        from apps.notifications.email_catalogue import EMAIL_CATALOGUE, infer_category
+        for entry in EMAIL_CATALOGUE:
+            if entry.key == 'mass_message':
+                continue  # admin-authored subject has no stable pattern
+            self.assertEqual(
+                infer_category(entry.subject), entry.key,
+                f'{entry.key} subject no longer classifies to itself',
+            )

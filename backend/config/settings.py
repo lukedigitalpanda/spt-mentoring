@@ -390,6 +390,7 @@ JAZZMIN_SETTINGS = {
         "notifications.Notification": "fas fa-bell",
         "notifications.PushSubscription":  "fas fa-mobile-alt",
         "notifications.EmailCatalogueEntry": "fas fa-book",
+        "notifications.EmailLog": "fas fa-inbox",
     },
     "default_icon_parents": "fas fa-chevron-circle-right",
     "default_icon_children": "fas fa-circle",

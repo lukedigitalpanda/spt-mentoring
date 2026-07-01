@@ -19,10 +19,13 @@ class FixedEmailBuildersTests(TestCase):
     def test_moderation_alert_builder(self):
         from apps.moderation.service import build_moderation_alert
         subject, body = build_moderation_alert('Al Ice', 'al@x.com', 'badword',
-                                               'https://x/admin/msg/5/', 5)
+                                               'https://x/admin/msg/5/', 5,
+                                               'the full flagged message text here')
         self.assertEqual(subject, '[SPT Moderation] Flagged message requires review (#5)')
         self.assertIn('Al Ice (al@x.com)', body)
         self.assertIn('badword', body)
+        self.assertIn('Preview:', body)
+        self.assertIn('the full flagged message text here', body)
 
     def test_password_reset_builder(self):
         from apps.users.auth_views import PASSWORD_RESET_SUBJECT, build_password_reset_body

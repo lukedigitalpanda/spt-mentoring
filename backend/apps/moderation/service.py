@@ -286,12 +286,13 @@ def _combo_fires(emoji_list: list[str], combo_parts: list[str], proximity: int) 
 # ModerationService
 # ---------------------------------------------------------------------------
 
-def build_moderation_alert(sender_name, sender_email, triggered_term, admin_url, message_pk):
+def build_moderation_alert(sender_name, sender_email, triggered_term, admin_url, message_pk, message_body):
     subject = f'[SPT Moderation] Flagged message requires review (#{message_pk})'
     body = (
         f'A message has been flagged for review.\n\n'
         f'Sender:       {sender_name} ({sender_email})\n'
         f'Triggered by: "{triggered_term}"\n'
+        f'Preview:      {message_body[:200]}\n\n'
         f'Review it here: {admin_url}\n'
     )
     return subject, body
@@ -664,7 +665,8 @@ class ModerationService:
             f'{settings.CSRF_TRUSTED_ORIGINS[0]}/admin/messaging/message/{message.pk}/change/'
         )
         subject, body = build_moderation_alert(
-            message.sender.full_name, message.sender.email, triggered_term, admin_url, message.pk,
+            message.sender.full_name, message.sender.email, triggered_term,
+            admin_url, message.pk, message.body,
         )
 
         staff_users = User.objects.filter(is_active=True).filter(

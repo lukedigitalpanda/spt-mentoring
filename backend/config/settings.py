@@ -223,6 +223,7 @@ DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='mentoring@spt.org')
 # MAX_DELAY_SECONDS from when the window first opened.
 NOTIFICATION_EMAIL_DEBOUNCE_SECONDS = config('NOTIFICATION_EMAIL_DEBOUNCE_SECONDS', default=300, cast=int)
 NOTIFICATION_EMAIL_MAX_DELAY_SECONDS = config('NOTIFICATION_EMAIL_MAX_DELAY_SECONDS', default=900, cast=int)
+EMAIL_LOG_RETENTION_DAYS = config('EMAIL_LOG_RETENTION_DAYS', default=90, cast=int)
 
 # Web Push / VAPID
 VAPID_PRIVATE_KEY = config('VAPID_PRIVATE_KEY', default='')

@@ -18,4 +18,12 @@ app.conf.beat_schedule = {
         'task': 'apps.messaging.tasks.send_sponsor_update_reminders',
         'schedule': crontab(hour=9, minute=30, day_of_week=1),  # Monday 9:30am
     },
+    'flush-notification-email-digests': {
+        'task': 'apps.notifications.tasks.flush_notification_email_digests_task',
+        'schedule': 60.0,  # every minute — sends debounced email batches that are due
+    },
+    'purge-email-logs-daily': {
+        'task': 'apps.notifications.tasks.purge_email_logs_task',
+        'schedule': crontab(hour=3, minute=15),  # daily 03:15
+    },
 }

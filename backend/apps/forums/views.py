@@ -95,7 +95,14 @@ class PostViewSet(viewsets.ModelViewSet):
         user = self.request.user
         qs = Post.objects.select_related('author')
         if not (user.is_staff or user.role == 'admin'):
-            qs = qs.filter(status=Post.Status.VISIBLE)
+            # P2-4 (mirroring Task 5's messaging rule): authors see their own
+            # held (flagged) and hidden (blocked) posts so they can fix and
+            # resubmit them; everyone else only ever sees VISIBLE posts.
+            from django.db.models import Q
+            qs = qs.filter(
+                Q(status=Post.Status.VISIBLE)
+                | Q(author=user, status__in=[Post.Status.FLAGGED, Post.Status.HIDDEN])
+            )
         return qs
 
     def create(self, request, *args, **kwargs):

@@ -243,3 +243,97 @@ class PostEditTests(TestCase):
         delete = other_client.delete(f'/api/forums/posts/{post.pk}/')
         self.assertEqual(delete.status_code, 403, delete.content)
         self.assertTrue(Post.objects.filter(pk=post.pk).exists())
+
+
+class HeldPostVisibilityAndResubmitTests(TestCase):
+    """P2-4 follow-up: authors must be able to see and fix their own held
+    (flagged) or hidden (blocked) posts, mirroring Task 5's messaging rule.
+    Other participants must never see held/hidden content."""
+
+    def setUp(self):
+        ModerationService.invalidate_cache()
+        ModerationTerm.objects.create(
+            term='shit', match_type=ModerationTerm.MatchType.SUBSTRING,
+            severity=ModerationTerm.Severity.MEDIUM, source='bulk_import_v1', is_active=True,
+        )
+        ModerationTerm.objects.create(
+            term='murder', match_type=ModerationTerm.MatchType.SUBSTRING,
+            severity=ModerationTerm.Severity.CRITICAL, source='bulk_import_v1', is_active=True,
+        )
+        ModerationService.invalidate_cache()
+        self.author = make_user('held-author@example.com')
+        self.other = make_user('held-other@example.com')
+        self.forum = Forum.objects.create(title='General', visibility=Forum.Visibility.OPEN)
+        self.thread = Thread.objects.create(forum=self.forum, title='Hello', created_by=self.author)
+        self.client_api = APIClient()
+        self.client_api.force_authenticate(self.author)
+
+    def tearDown(self):
+        ModerationService.invalidate_cache()
+
+    def _create_post(self, body, expect_status):
+        resp = self.client_api.post(
+            '/api/forums/posts/', {'thread': self.thread.pk, 'body': body}, format='json'
+        )
+        assert resp.status_code == expect_status, resp.content
+        return Post.objects.latest('created_at')
+
+    def _thread_listing_ids(self, client):
+        resp = client.get(f'/api/forums/posts/?thread={self.thread.pk}')
+        data = resp.data['results'] if isinstance(resp.data, dict) and 'results' in resp.data else resp.data
+        return [p['id'] for p in data]
+
+    def test_author_sees_own_flagged_post_but_others_do_not(self):
+        post = self._create_post('this is shit', 202)
+        self.assertEqual(post.status, Post.Status.FLAGGED)
+
+        self.assertIn(post.pk, self._thread_listing_ids(self.client_api))
+
+        other_client = APIClient()
+        other_client.force_authenticate(self.other)
+        self.assertNotIn(post.pk, self._thread_listing_ids(other_client))
+
+    def test_author_edits_own_flagged_post_to_clean_becomes_visible(self):
+        post = self._create_post('this is shit', 202)
+        edit = self.client_api.patch(
+            f'/api/forums/posts/{post.pk}/',
+            {'body': 'Apologies, here is a polite version.'}, format='json',
+        )
+        self.assertEqual(edit.status_code, 200, edit.content)
+        post.refresh_from_db()
+        self.assertEqual(post.status, Post.Status.VISIBLE)
+        self.assertIsNotNone(post.edited_at)
+
+        # Now visible to everyone.
+        other_client = APIClient()
+        other_client.force_authenticate(self.other)
+        self.assertIn(post.pk, self._thread_listing_ids(other_client))
+
+    def test_author_edits_own_hidden_post_and_is_rescreened(self):
+        post = self._create_post('I want to murder', 400)
+        self.assertEqual(post.status, Post.Status.HIDDEN)
+
+        # Still held when the edit still trips a flagged term.
+        edit = self.client_api.patch(
+            f'/api/forums/posts/{post.pk}/', {'body': 'this is shit'}, format='json',
+        )
+        self.assertEqual(edit.status_code, 202, edit.content)
+        post.refresh_from_db()
+        self.assertEqual(post.status, Post.Status.FLAGGED)
+
+        # A clean re-edit releases it.
+        edit = self.client_api.patch(
+            f'/api/forums/posts/{post.pk}/', {'body': 'Entirely clean now.'}, format='json',
+        )
+        self.assertEqual(edit.status_code, 200, edit.content)
+        post.refresh_from_db()
+        self.assertEqual(post.status, Post.Status.VISIBLE)
+
+    def test_other_user_cannot_edit_or_fetch_held_post(self):
+        post = self._create_post('this is shit', 202)
+        other_client = APIClient()
+        other_client.force_authenticate(self.other)
+        edit = other_client.patch(
+            f'/api/forums/posts/{post.pk}/', {'body': 'Hijack attempt'}, format='json',
+        )
+        self.assertEqual(edit.status_code, 404, edit.content)

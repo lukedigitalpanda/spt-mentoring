@@ -198,7 +198,7 @@ function GoalCard({ goal, currentUserId }: { goal: Goal; currentUserId?: number 
           </div>
 
           {isOwn && (
-            <div className="flex gap-2 mt-3">
+            <div className="flex gap-2 mt-3 items-end">
               <input
                 placeholder="Add a milestone…"
                 value={newMilestone}
@@ -206,8 +206,11 @@ function GoalCard({ goal, currentUserId }: { goal: Goal; currentUserId?: number 
                 onKeyDown={e => e.key === 'Enter' && newMilestone.trim() && addMilestone.mutate()}
                 className="flex-1 border border-purple-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors"
               />
-              <input type="date" value={milestoneDue} onChange={e => setMilestoneDue(e.target.value)}
-                className="border border-purple-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors w-32" />
+              <label className="block text-[10px] font-medium text-navy-500/70">
+                Milestone due date
+                <input type="date" value={milestoneDue} onChange={e => setMilestoneDue(e.target.value)}
+                  className="mt-1 border border-purple-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors w-32" />
+              </label>
               <button onClick={() => newMilestone.trim() && addMilestone.mutate()}
                 disabled={!newMilestone.trim() || addMilestone.isPending}
                 className="text-xs font-semibold bg-pink-500 text-white px-3 py-1.5 rounded-lg hover:bg-pink-600 disabled:opacity-50 transition-colors">
@@ -246,8 +249,11 @@ function NewGoalForm({ onClose }: { onClose: () => void }) {
           className="border border-purple-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors text-navy-500 capitalize">
           {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
-          className="border border-purple-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors" />
+        <label className="block text-xs font-medium text-navy-500/70">
+          Target completion date
+          <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
+            className="mt-1 w-full border border-purple-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors" />
+        </label>
       </div>
       <div className="flex gap-2 justify-end pt-1">
         <button onClick={onClose} className="text-sm text-navy-500/60 px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">Cancel</button>
@@ -266,12 +272,15 @@ export default function GoalsPage() {
   const [showNew, setShowNew] = useState(false);
   // ISS-G: default to 'all' so Acknowledged (paused) goals are never hidden.
   const [filterStatus, setFilterStatus] = useState('');
+  // P3-4: sort control - default matches the backend's own default (-created_at).
+  const [ordering, setOrdering] = useState('');
 
   const params = new URLSearchParams();
   if (filterStatus) params.set('status', filterStatus);
+  if (ordering) params.set('ordering', ordering);
 
   const { data, isLoading } = useQuery<PaginatedResponse<Goal>>({
-    queryKey: ['goals', filterStatus],
+    queryKey: ['goals', filterStatus, ordering],
     queryFn: () => api.get(`/goals/goals/?${params.toString()}`).then(r => r.data),
   });
 
@@ -315,10 +324,21 @@ export default function GoalsPage() {
             </button>
           ))}
         </div>
-        <button onClick={() => setShowNew(v => !v)}
-          className="text-sm font-semibold bg-pink-500 text-white px-5 py-2.5 rounded-xl hover:bg-pink-600 transition-colors shadow-brand">
-          + New goal
-        </button>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-1.5 text-xs font-medium text-navy-500/60">
+            Sort
+            <select value={ordering} onChange={e => setOrdering(e.target.value)}
+              className="border border-purple-200 rounded-lg px-2.5 py-1.5 text-xs text-navy-500 focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors">
+              <option value="">Newest first</option>
+              <option value="due_date">Due date (soonest first)</option>
+              <option value="-due_date">Due date (latest first)</option>
+            </select>
+          </label>
+          <button onClick={() => setShowNew(v => !v)}
+            className="text-sm font-semibold bg-pink-500 text-white px-5 py-2.5 rounded-xl hover:bg-pink-600 transition-colors shadow-brand">
+            + New goal
+          </button>
+        </div>
       </div>
 
       {showNew && <NewGoalForm onClose={() => setShowNew(false)} />}

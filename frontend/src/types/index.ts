@@ -90,6 +90,7 @@ export interface Message {
   sender_name: string;
   body: string;
   sent_at: string;
+  edited_at?: string | null;
   status: 'pending' | 'delivered' | 'flagged' | 'blocked' | 'deleted';
   attachment: string | null;
   is_read: boolean;
@@ -159,6 +160,7 @@ export interface Post {
   author_name: string;
   body: string;
   created_at: string;
+  edited_at?: string | null;
   status: 'pending' | 'visible' | 'flagged' | 'hidden';
   attachment: string | null;
 }

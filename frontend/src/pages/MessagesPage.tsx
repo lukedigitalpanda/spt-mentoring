@@ -28,6 +28,30 @@ const composeBlockedText = (reason?: string, fallbackDetail?: string) =>
     ? `Your message could not be sent because ${reason}. Please edit it and try again.`
     : fallbackDetail || 'Your message could not be sent. Please try again.';
 
+// P2-4: own messages stay editable while flagged/blocked (any time - the
+// sender needs to be able to fix and resubmit), and for a short window after
+// clean delivery. Attachment messages (body is just the filename) and
+// broadcast/mass-message conversations are never editable.
+const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000;
+
+function isMessageEditable(msg: Message, isMine: boolean, conversationType?: string): boolean {
+  if (!isMine || msg.attachment) return false;
+  if (conversationType === 'mass_message') return false;
+  if (msg.status === 'flagged' || msg.status === 'blocked') return true;
+  if (msg.status === 'delivered') {
+    return Date.now() - new Date(msg.sent_at).getTime() <= MESSAGE_EDIT_WINDOW_MS;
+  }
+  return false;
+}
+
+function PencilIcon({ className = 'w-3.5 h-3.5' }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+    </svg>
+  );
+}
+
 function ReportForm({ onSubmit, onCancel, isPending }: {
   onSubmit: (description: string) => void;
   onCancel: () => void;
@@ -78,6 +102,11 @@ export default function MessagesPage() {
   const [wsMessages, setWsMessages] = useState<Message[]>([]);
   const attachRef = useRef<HTMLInputElement>(null);
   const [attachPending, setAttachPending] = useState(false);
+  // Editing an existing message uses a separate composer state so the
+  // in-progress new-message draft (and its sessionStorage persistence) is
+  // never touched while editing - cancelling simply drops back to it untouched.
+  const [editingMsgId, setEditingMsgId] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState('');
   const taRef = useRef<HTMLTextAreaElement>(null);
   const autoGrow = () => {
     const el = taRef.current;
@@ -167,6 +196,21 @@ export default function MessagesPage() {
     ...locallyReported,
   ]);
 
+  // Applies an edit (own PATCH result, or another participant's edit relayed
+  // over the WS message_edited event) to whichever store currently holds the
+  // message - the react-query history cache, or the local WS buffer for
+  // messages that haven't been folded into a refetch yet.
+  const patchMessage = useCallback((id: number, fields: Partial<Message>) => {
+    const cached = qc.getQueryData<{ results: Message[] }>(['messages', selectedConv]);
+    if (cached?.results.some(m => m.id === id)) {
+      qc.setQueryData<{ results: Message[] }>(['messages', selectedConv], (old) =>
+        old ? { ...old, results: old.results.map(m => (m.id === id ? { ...m, ...fields } : m)) } : old
+      );
+    } else {
+      setWsMessages(prev => prev.map(m => (m.id === id ? { ...m, ...fields } : m)));
+    }
+  }, [qc, selectedConv]);
+
   useEffect(() => {
     if (!selectedConv) return;
     const token = localStorage.getItem('access_token');
@@ -219,6 +263,11 @@ export default function MessagesPage() {
           });
         }
         setModerationNotice(null);
+      } else if (data.type === 'message_edited') {
+        // Relayed edit of a delivered message (own edit reflected back, or the
+        // other participant's edit when they have the thread open) - replace
+        // the body/edited_at in place, never append.
+        patchMessage(data.message_id, { body: data.body, edited_at: data.edited_at });
       } else if (data.type === 'message_flagged') {
         setModerationNotice({ type: 'flagged', text: composeFlaggedText(data.reason) });
         // The consumer persists the message but only sends back reason/id, not
@@ -254,7 +303,7 @@ export default function MessagesPage() {
       }
     };
     return () => ws.close();
-  }, [selectedConv, user?.id]);
+  }, [selectedConv, user?.id, patchMessage]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -262,10 +311,63 @@ export default function MessagesPage() {
 
   // Restore (or clear) the per-conversation draft whenever the selected
   // conversation changes, including on first load after a reload/rotation.
+  // Switching conversations always drops out of edit mode - the message
+  // being edited belongs to the conversation being left.
   useEffect(() => {
     setDraft(selectedConv ? sessionStorage.getItem(draftKey(selectedConv)) ?? '' : '');
+    setEditingMsgId(null);
+    setEditDraft('');
     requestAnimationFrame(() => autoGrow());
   }, [selectedConv]);
+
+  // Loads an existing message's body into the composer in "editing" mode.
+  // Uses its own state (editDraft), so the in-progress new-message draft
+  // (and its sessionStorage entry) is left completely untouched underneath.
+  const startEditingMessage = (msg: Message) => {
+    setEditingMsgId(msg.id);
+    setEditDraft(msg.body);
+    setModerationNotice(null);
+    requestAnimationFrame(() => autoGrow());
+  };
+
+  const cancelEditingMessage = () => {
+    setEditingMsgId(null);
+    setEditDraft('');
+    setModerationNotice(null);
+    requestAnimationFrame(() => autoGrow());
+  };
+
+  const saveEditedMessage = async () => {
+    const body = editDraft.trim();
+    if (!body || editingMsgId == null) return;
+    const id = editingMsgId;
+    setModerationNotice(null);
+    try {
+      const resp = await api.patch(`/messaging/messages/${id}/`, { body });
+      if (resp.status === 202) {
+        // Held for re-review - the edit was accepted, so leave editing mode
+        // (mirrors a fresh flagged send) and let the envelope's serialised
+        // message drive the pending badge.
+        const respData = resp.data as { moderation_reason?: string; message?: Message };
+        setModerationNotice({ type: 'flagged', text: composeFlaggedText(respData.moderation_reason) });
+        if (respData.message) patchMessage(id, respData.message);
+        cancelEditingMessage();
+      } else {
+        patchMessage(id, resp.data as Message);
+        cancelEditingMessage();
+      }
+      qc.invalidateQueries({ queryKey: ['conversations'] });
+    } catch (err: any) {
+      const errData = err?.response?.data as { detail?: string; moderation_reason?: string; message?: Message } | undefined;
+      setModerationNotice({
+        type: 'blocked',
+        text: composeBlockedText(errData?.moderation_reason, errData?.detail),
+      });
+      if (errData?.message) patchMessage(id, errData.message);
+      // Stay in editing mode (mirrors a blocked fresh send keeping the draft)
+      // so the sender can amend the offending text and resubmit.
+    }
+  };
 
   const sendMessage = async () => {
     const body = draft.trim();
@@ -527,6 +629,7 @@ export default function MessagesPage() {
                 {allMessages.map((msg) => {
                   const isMine = msg.sender === user?.id;
                   const reported = reportedMessageIds.has(msg.id);
+                  const editable = isMessageEditable(msg, isMine, selectedConvData?.conversation_type);
                   return (
                     <div key={`${msg.id}-${msg.sent_at}`} className={`flex min-w-0 ${isMine ? 'justify-end' : 'justify-start'}`}>
                       <div className="max-w-[80%] sm:max-w-sm min-w-0 group relative">
@@ -573,7 +676,18 @@ export default function MessagesPage() {
                         <div className={`flex items-center mt-1 gap-2 ${isMine ? 'justify-end' : 'justify-start'}`}>
                           <p className="text-[10px] text-navy-500/30">
                             {new Date(msg.sent_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                            {msg.edited_at && ' (edited)'}
                           </p>
+                          {editable && (
+                            <button
+                              onClick={() => startEditingMessage(msg)}
+                              title="Edit this message"
+                              aria-label="Edit this message"
+                              className="flex items-center justify-center w-10 h-10 -m-1.5 text-navy-500/40 hover:text-purple-500 transition-colors rounded-full hover:bg-purple-50"
+                            >
+                              <PencilIcon />
+                            </button>
+                          )}
                           {!isMine && (
                             reported ? (
                               <span className="text-[10px] text-green-600 font-semibold flex items-center gap-1">
@@ -620,6 +734,21 @@ export default function MessagesPage() {
 
               {/* Compose */}
               <div className="px-5 py-3 bg-white border-t border-purple-100">
+                {/* Editing banner */}
+                {editingMsgId !== null && (
+                  <div className="mb-2.5 px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between gap-2 bg-purple-50 border border-purple-100 text-purple-700">
+                    <span className="flex items-center gap-1.5">
+                      <PencilIcon className="w-3.5 h-3.5 flex-shrink-0" />
+                      Editing message
+                    </span>
+                    <button
+                      onClick={cancelEditingMessage}
+                      className="font-semibold text-navy-500/50 hover:text-navy-500 underline"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
                 {/* Moderation notices */}
                 {moderationNotice && (
                   <div className={`mb-2.5 px-3 py-2 rounded-lg text-xs font-medium flex items-start gap-2 ${
@@ -650,8 +779,8 @@ export default function MessagesPage() {
                     <button
                       type="button"
                       onClick={() => attachRef.current?.click()}
-                      disabled={attachPending}
-                      title="Attach a file"
+                      disabled={attachPending || editingMsgId !== null}
+                      title={editingMsgId !== null ? 'Cancel editing to attach a file' : 'Attach a file'}
                       className="flex-shrink-0 text-navy-500/40 hover:text-purple-500 disabled:opacity-40 transition-colors p-1"
                     >
                       {attachPending ? (
@@ -667,31 +796,52 @@ export default function MessagesPage() {
                     <textarea
                       ref={taRef}
                       rows={1}
-                      value={draft}
+                      value={editingMsgId !== null ? editDraft : draft}
                       onChange={e => {
-                        setDraft(e.target.value);
-                        if (selectedConv) sessionStorage.setItem(draftKey(selectedConv), e.target.value);
+                        if (editingMsgId !== null) {
+                          setEditDraft(e.target.value);
+                        } else {
+                          setDraft(e.target.value);
+                          if (selectedConv) sessionStorage.setItem(draftKey(selectedConv), e.target.value);
+                        }
                         autoGrow();
                       }}
                       onKeyDown={e => {
                         if (e.key === 'Enter' && !e.shiftKey && !IS_COARSE_POINTER) {
                           e.preventDefault();
-                          sendMessage();
+                          if (editingMsgId !== null) {
+                            saveEditedMessage();
+                          } else {
+                            sendMessage();
+                          }
                         }
                       }}
-                      placeholder="Type a message..."
+                      placeholder={editingMsgId !== null ? 'Edit your message...' : 'Type a message...'}
                       className="flex-1 min-w-0 resize-none overflow-y-auto max-h-40 border-2 border-purple-100 rounded-xl px-4 py-2.5 text-sm text-navy-500 bg-[#faf9fd] focus:outline-none focus:border-pink-500 transition-colors placeholder:text-navy-500/30"
                     />
-                    <button
-                      onClick={sendMessage}
-                      disabled={!draft.trim()}
-                      className="flex-shrink-0 bg-gradient-brand-soft text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:opacity-90 disabled:opacity-40 transition-all shadow-brand flex items-center gap-1.5"
-                    >
-                      Send
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                      </svg>
-                    </button>
+                    {editingMsgId !== null ? (
+                      <button
+                        onClick={saveEditedMessage}
+                        disabled={!editDraft.trim()}
+                        className="flex-shrink-0 bg-gradient-brand-soft text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:opacity-90 disabled:opacity-40 transition-all shadow-brand flex items-center gap-1.5"
+                      >
+                        Save
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={sendMessage}
+                        disabled={!draft.trim()}
+                        className="flex-shrink-0 bg-gradient-brand-soft text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:opacity-90 disabled:opacity-40 transition-all shadow-brand flex items-center gap-1.5"
+                      >
+                        Send
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

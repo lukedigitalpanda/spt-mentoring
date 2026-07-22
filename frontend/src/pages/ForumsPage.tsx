@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../utils/api';
 import { useAuth } from '../hooks/useAuth';
@@ -29,6 +29,25 @@ const statusBadge: Record<string, string> = {
 function fmt(d?: string | null) {
   if (!d) return '';
   return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// The forum post serializer only returns the attachment URL (no separate
+// filename field), so recover a readable name from the storage path.
+function attachmentFilename(url: string) {
+  try {
+    const path = new URL(url, window.location.origin).pathname;
+    return decodeURIComponent(path.split('/').pop() || 'Attachment');
+  } catch {
+    return 'Attachment';
+  }
+}
+
+function PaperclipIcon({ className = 'w-3.5 h-3.5 flex-shrink-0' }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+    </svg>
+  );
 }
 
 // ── Forum list ────────────────────────────────────────────────────────────────
@@ -230,6 +249,8 @@ function PostList({
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [body, setBody] = useState('');
+  const [attachment, setAttachment] = useState<File | null>(null);
+  const attachRef = useRef<HTMLInputElement>(null);
   const [postNotice, setPostNotice] = useState<{ type: 'flagged' | 'blocked'; text: string } | null>(null);
   const [reportingPostId, setReportingPostId] = useState<number | null>(null);
   const [reportingAuthorId, setReportingAuthorId] = useState<number | null>(null);
@@ -260,11 +281,13 @@ function PostList({
   });
 
   const createPost = useMutation({
-    mutationFn: (payload: { thread: number; body: string }) =>
-      api.post('/forums/posts/', payload),
+    mutationFn: (payload: FormData) =>
+      api.post('/forums/posts/', payload, { headers: { 'Content-Type': 'multipart/form-data' } }),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['posts', thread.id] });
       setBody('');
+      setAttachment(null);
+      if (attachRef.current) attachRef.current.value = '';
       // 202 Accepted means the post is held for moderation review — tell the user.
       const moderationStatus = (res?.data as { moderation_status?: string })?.moderation_status;
       if (moderationStatus === 'pending_review') {
@@ -277,15 +300,20 @@ function PostList({
       }
     },
     onError: (error: unknown) => {
-      const axiosError = error as { response?: { status?: number; data?: { moderation_status?: string; detail?: string } } };
+      const axiosError = error as { response?: { status?: number; data?: { moderation_status?: string; detail?: string; attachment?: string[] } } };
       const httpStatus = axiosError?.response?.status;
       const moderationStatus = axiosError?.response?.data?.moderation_status;
+      const attachmentError = axiosError?.response?.data?.attachment?.[0];
 
       if (httpStatus === 400 && moderationStatus === 'blocked') {
         setPostNotice({
           type: 'blocked',
           text: 'Your post could not be submitted as it contains restricted content.',
         });
+      } else if (httpStatus === 400 && attachmentError) {
+        // Server-side attachment validation (e.g. disallowed file type) - surface
+        // it rather than failing silently.
+        setPostNotice({ type: 'blocked', text: attachmentError });
       } else {
         setPostNotice(null);
       }
@@ -296,7 +324,11 @@ function PostList({
     e.preventDefault();
     if (!body.trim()) return;
     setPostNotice(null);
-    createPost.mutate({ thread: thread.id, body: body.trim() });
+    const fd = new FormData();
+    fd.append('thread', String(thread.id));
+    fd.append('body', body.trim());
+    if (attachment) fd.append('attachment', attachment);
+    createPost.mutate(fd);
   };
 
   return (
@@ -361,6 +393,17 @@ function PostList({
                   </div>
                 </div>
                 <p className="text-sm text-navy-500/80 whitespace-pre-wrap break-words">{post.body}</p>
+                {post.attachment && (
+                  <a
+                    href={post.attachment}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 mt-2 underline text-xs font-semibold text-purple-600 break-words"
+                  >
+                    <PaperclipIcon />
+                    {attachmentFilename(post.attachment)}
+                  </a>
+                )}
               </div>
             ))
           )}
@@ -378,6 +421,38 @@ function PostList({
             onChange={e => setBody(e.target.value)}
             required
           />
+          <div className="flex items-center gap-2">
+            <input
+              ref={attachRef}
+              type="file"
+              className="hidden"
+              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
+              onChange={e => setAttachment(e.target.files?.[0] ?? null)}
+            />
+            <button
+              type="button"
+              onClick={() => attachRef.current?.click()}
+              title="Attach a file"
+              className="flex-shrink-0 text-navy-500/40 hover:text-purple-500 transition-colors p-1"
+            >
+              <PaperclipIcon className="w-5 h-5" />
+            </button>
+            {attachment && (
+              <span className="text-xs text-navy-500/60 truncate flex items-center gap-1.5">
+                {attachment.name}
+                <button
+                  type="button"
+                  onClick={() => { setAttachment(null); if (attachRef.current) attachRef.current.value = ''; }}
+                  title="Remove attachment"
+                  className="text-navy-500/30 hover:text-red-500 flex-shrink-0"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </span>
+            )}
+          </div>
           {postNotice && (
             <div className={`px-3 py-2 rounded-lg text-xs font-medium flex items-start gap-2 ${
               postNotice.type === 'blocked'

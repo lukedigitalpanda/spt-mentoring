@@ -213,7 +213,7 @@ export default function MessagesPage() {
               id: data.message_id, conversation: selectedConv,
               sender: data.sender_id, sender_name: data.sender_name,
               body: data.body, sent_at: data.sent_at,
-              status: 'delivered', attachment: null,
+              status: 'delivered', attachment: data.attachment_url ?? null,
               is_read: data.sender_id === user?.id,
             }];
           });
@@ -310,6 +310,7 @@ export default function MessagesPage() {
   const sendAttachment = async (file: File) => {
     if (!selectedConv) return;
     setAttachPending(true);
+    setModerationNotice(null);
     try {
       const fd = new FormData();
       fd.append('conversation', String(selectedConv));
@@ -317,6 +318,11 @@ export default function MessagesPage() {
       fd.append('attachment', file);
       await api.post('/messaging/messages/', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       qc.invalidateQueries({ queryKey: ['messages', selectedConv] });
+    } catch (err: any) {
+      setModerationNotice({
+        type: 'blocked',
+        text: err.response?.data?.attachment?.[0] ?? 'That file could not be attached.',
+      });
     } finally {
       setAttachPending(false);
       if (attachRef.current) attachRef.current.value = '';
@@ -638,7 +644,7 @@ export default function MessagesPage() {
                       ref={attachRef}
                       type="file"
                       className="hidden"
-                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv"
+                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
                       onChange={e => { const f = e.target.files?.[0]; if (f) sendAttachment(f); }}
                     />
                     <button

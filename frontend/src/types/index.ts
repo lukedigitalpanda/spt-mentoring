@@ -160,6 +160,7 @@ export interface Post {
   body: string;
   created_at: string;
   status: 'pending' | 'visible' | 'flagged' | 'hidden';
+  attachment: string | null;
 }
 
 export interface ResourceCategory {

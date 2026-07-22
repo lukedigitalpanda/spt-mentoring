@@ -1,5 +1,5 @@
 """Auto-create role-specific profiles when a User is created or updated."""
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from .models import User, MentorProfile, ScholarProfile, SponsorProfile, MentoringMatch
 
@@ -51,6 +51,19 @@ def _find_match_conversation(scholar, mentor):
         )
         .first()
     )
+
+
+@receiver(pre_save, sender=MentoringMatch)
+def _stash_previous_active_state(sender, instance, **kwargs):
+    """Record the pre-save is_active value so the post_save handler can tell a
+    genuine False->True reinstatement apart from an unrelated field update on
+    an already-active match (e.g. editing notes)."""
+    if instance.pk:
+        instance._was_active = (
+            MentoringMatch.objects.filter(pk=instance.pk).values_list('is_active', flat=True).first()
+        )
+    else:
+        instance._was_active = None
 
 
 @receiver(post_save, sender=MentoringMatch)
@@ -119,8 +132,12 @@ def ensure_match_conversation(sender, instance, created, **kwargs):
             body=f'{instance.scholar.full_name} has been matched with you. Head to Messages to introduce yourself.',
             link='/messages',
         )
-    else:
-        # Reinstatement — let both parties know messaging is back.
+    elif getattr(instance, '_was_active', None) is False:
+        # Genuine reinstatement (is_active flipped False -> True) — let both
+        # parties know messaging is back. Guarded by _was_active (stashed in
+        # pre_save) so an unrelated field update on an already-active match
+        # (e.g. editing notes) does NOT re-fire these notifications or the
+        # email below.
         Notification.objects.create(
             user=instance.scholar,
             notification_type=Notification.Type.MATCH,
@@ -141,9 +158,15 @@ def ensure_match_conversation(sender, instance, created, **kwargs):
             ),
             link='/messages',
         )
+    else:
+        # Active match, not created and not a genuine reinstatement — an
+        # unrelated field update (e.g. notes edited via admin). No email, no
+        # notification.
+        return
 
     # ── Email ─────────────────────────────────────────────────────────────────
-    # Fires for both the fresh-match and reinstatement branches above; skipped
-    # entirely on deactivation because we returned early when not is_active.
+    # Fires for both the fresh-match and genuine-reinstatement branches above;
+    # skipped entirely on deactivation (early return above) and on unrelated
+    # field updates (early return in the elif/else above).
     from apps.messaging.tasks import send_match_notification_emails
     send_match_notification_emails.delay(instance.id)

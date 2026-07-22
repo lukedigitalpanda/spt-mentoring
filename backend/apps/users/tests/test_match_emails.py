@@ -94,3 +94,34 @@ class MatchEmailTests(TestCase):
         match.save(update_fields=['is_active'])
 
         self.assertEqual(len(mail.outbox), 0)
+
+    def test_unrelated_field_update_on_active_match_sends_no_email_or_notification(self):
+        from apps.notifications.models import Notification
+
+        match = MentoringMatch.objects.create(scholar=self.scholar, mentor=self.mentor, is_active=True)
+        mail.outbox = []
+        notes_before = Notification.objects.filter(
+            user__in=[self.scholar, self.mentor], notification_type=Notification.Type.MATCH,
+        ).count()
+
+        match.notes = 'reviewed by admin'
+        match.save(update_fields=['notes'])
+
+        self.assertEqual(len(mail.outbox), 0)
+        notes_after = Notification.objects.filter(
+            user__in=[self.scholar, self.mentor], notification_type=Notification.Type.MATCH,
+        ).count()
+        self.assertEqual(notes_after, notes_before)
+
+    def test_genuine_reinstatement_false_to_true_sends_emails_once(self):
+        match = MentoringMatch.objects.create(scholar=self.scholar, mentor=self.mentor, is_active=True)
+        match.is_active = False
+        match.save(update_fields=['is_active'])
+        mail.outbox = []
+
+        match.is_active = True
+        match.save(update_fields=['is_active'])
+
+        self.assertEqual(len(mail.outbox), 2)
+        recipients = sorted(m.to[0] for m in mail.outbox)
+        self.assertEqual(recipients, sorted([self.scholar.email, self.mentor.email]))

@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
@@ -49,10 +50,26 @@ class AvailabilitySlotViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         # Mentors can only create their own slots
         user = self.request.user
-        if user.role == 'mentor':
-            serializer.save(mentor=user)
-        else:
-            serializer.save()
+        with transaction.atomic():
+            if user.role == 'mentor':
+                slot = serializer.save(mentor=user)
+            else:
+                slot = serializer.save()
+            self._merge_overlapping(slot)
+
+    def _merge_overlapping(self, slot):
+        """Absorb any same-mentor, unbooked slots that overlap or touch the
+        new slot into a single slot spanning the full extent. Booked slots
+        are never touched."""
+        overlapping = AvailabilitySlot.objects.filter(
+            mentor=slot.mentor, is_booked=False,
+            start_time__lte=slot.end_time, end_time__gte=slot.start_time,
+        ).exclude(id=slot.id)
+        if overlapping.exists():
+            slot.start_time = min([slot.start_time] + [s.start_time for s in overlapping])
+            slot.end_time = max([slot.end_time] + [s.end_time for s in overlapping])
+            slot.save(update_fields=['start_time', 'end_time'])
+            overlapping.delete()
 
     def get_permissions(self):
         if self.action in ('update', 'partial_update', 'destroy'):

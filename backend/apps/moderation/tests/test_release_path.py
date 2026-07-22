@@ -167,3 +167,61 @@ class AdminMarkDeliveredTests(TestCase):
             ).exists()
         )
         self.assertTrue(Notification.objects.filter(user=self.recipient).exists())
+
+    def test_admin_mark_delivered_ignores_non_flagged_rows_in_mixed_selection(self):
+        """A mixed selection (flagged, blocked, already-delivered) must only
+        release the flagged message. Looping approve() over the others would
+        silently reverse a moderator's block decision, fire a bogus
+        "approved" sender notification, and re-trigger the recipient
+        post_save signal for a message that was already delivered."""
+        blocked_sender = make_user('scholar-blocked@example.com', role=User.Role.SCHOLAR)
+        blocked_msg = Message.objects.create(
+            conversation=self.conv,
+            sender=blocked_sender,
+            body='blocked content',
+            status=Message.Status.BLOCKED,
+        )
+        delivered_msg = Message.objects.create(
+            conversation=self.conv,
+            sender=self.sender,
+            body='already delivered',
+            status=Message.Status.DELIVERED,
+        )
+        recipient_notifications_before = Notification.objects.filter(
+            user=self.recipient,
+        ).count()
+
+        request = self._request()
+        queryset = Message.objects.filter(
+            pk__in=[self.message.pk, blocked_msg.pk, delivered_msg.pk],
+        )
+        self.model_admin.mark_delivered(request, queryset)
+
+        self.message.refresh_from_db()
+        blocked_msg.refresh_from_db()
+        delivered_msg.refresh_from_db()
+
+        # The flagged message was released.
+        self.assertEqual(self.message.status, Message.Status.DELIVERED)
+        self.assertEqual(self.message.moderated_by, self.admin)
+
+        # The blocked message's decision is not reversed, and its sender
+        # gets no bogus "approved" notification.
+        self.assertEqual(blocked_msg.status, Message.Status.BLOCKED)
+        self.assertIsNone(blocked_msg.moderated_by)
+        self.assertFalse(
+            Notification.objects.filter(
+                user=blocked_sender, title__icontains='approved',
+            ).exists()
+        )
+
+        # The already-delivered message is untouched - not re-approved.
+        self.assertIsNone(delivered_msg.moderated_by)
+
+        # Only one new recipient notification was created (from the flagged
+        # message being released) - the already-delivered message's earlier
+        # notification was not duplicated.
+        self.assertEqual(
+            Notification.objects.filter(user=self.recipient).count(),
+            recipient_notifications_before + 1,
+        )

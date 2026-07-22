@@ -699,12 +699,19 @@ class MessageAdmin(FormFixMixin, ExportMixin, admin.ModelAdmin):
 
     @admin.action(description='Mark selected as delivered')
     def mark_delivered(self, request, queryset):
+        # Only FLAGGED messages may be released this way - looping approve()
+        # over BLOCKED or already-DELIVERED rows would silently reverse a
+        # moderator's block decision, fire a bogus "approved" sender
+        # notification, re-trigger the recipient post_save signal (duplicate
+        # notification + email), and re-broadcast into the live chat thread.
         from apps.moderation.service import ModerationService
-        delivered = 0
-        for msg in queryset:
+        released = 0
+        for msg in queryset.filter(status=Message.Status.FLAGGED):
             ModerationService.approve(msg, request.user, notes='Bulk approved via admin')
-            delivered += 1
-        self.message_user(request, f'{delivered} message(s) marked delivered.')
+            released += 1
+        skipped = queryset.exclude(status=Message.Status.FLAGGED).count()
+        note = f'{released} released, {skipped} skipped (not flagged).'
+        self.message_user(request, note)
 
     @admin.action(description='Mark selected as flagged')
     def mark_flagged(self, request, queryset):

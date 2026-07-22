@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../utils/api';
 import { useAuth } from '../hooks/useAuth';
-import type { MentoringSession, AvailabilitySlot, PaginatedResponse } from '../types';
+import type { MentoringSession, AvailabilitySlot, PaginatedResponse, ActiveMatch } from '../types';
 
 function BrandStar({ size = 16 }: { size?: number }) {
   return (
@@ -176,6 +176,17 @@ function SessionCard({ session, currentUserId, onAction }: {
   const isJoinable = sessionStart.getTime() - 5 * 60_000 <= now.getTime() && sessionEnd > now;
   const [joining, setJoining] = useState(false);
 
+  // Whoever did NOT create a pending session is the one who confirms/declines
+  // it (e.g. a mentor-proposed session is confirmed by the scholar, and vice
+  // versa). Legacy rows with no created_by keep the original behaviour:
+  // only the mentor confirms.
+  const isPending = session.status === 'pending';
+  const isCreator = session.created_by === currentUserId;
+  const respondsToPending = isPending && (
+    session.created_by == null ? isMentor : !isCreator
+  );
+  const awaitingMyOwnProposal = isMentor && isPending && isCreator;
+
   return (
     <div className="bg-white rounded-2xl shadow-card p-5">
       {showFeedback ? (
@@ -238,7 +249,7 @@ function SessionCard({ session, currentUserId, onAction }: {
                 Join video call (available 5 minutes before start)
               </button>
             )}
-            {isMentor && session.status === 'pending' && (
+            {respondsToPending && (
               <>
                 <button onClick={() => onAction(session.id, 'confirm')}
                   className="text-xs font-semibold bg-green-500 text-white px-3 py-1.5 rounded-lg hover:bg-green-600 transition-colors">
@@ -256,7 +267,10 @@ function SessionCard({ session, currentUserId, onAction }: {
                 Mark complete
               </button>
             )}
-            {session.status !== 'completed' && session.status !== 'cancelled' && !(isMentor && session.status === 'pending') && (
+            {awaitingMyOwnProposal && (
+              <span className="text-xs text-navy-500/40">Awaiting scholar confirmation.</span>
+            )}
+            {session.status !== 'completed' && session.status !== 'cancelled' && !respondsToPending && (
               <button onClick={() => onAction(session.id, 'cancel')}
                 className="text-xs font-medium text-navy-500/60 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
                 {session.status === 'pending' ? 'Withdraw request' : 'Cancel session'}
@@ -696,11 +710,106 @@ function BookingPanel({ currentUserId }: { currentUserId: number }) {
   );
 }
 
+// ── Propose a session (mentor) ──────────────────────────────────────────────
+function ProposeSessionModal({ scholars, onClose }: { scholars: ActiveMatch[]; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const [scholarId, setScholarId] = useState<number | ''>(scholars[0]?.scholar_id ?? '');
+  const [date, setDate] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
+  const [title, setTitle] = useState('Mentoring Session');
+  const [agenda, setAgenda] = useState('');
+  const [error, setError] = useState('');
+
+  const inputCls = 'w-full border border-purple-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors';
+
+  const propose = useMutation({
+    mutationFn: () => api.post('/sessions/sessions/propose/', {
+      scholar: scholarId,
+      start_time: `${date}T${startTime}`,
+      end_time: `${date}T${endTime}`,
+      title,
+      agenda,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      onClose();
+    },
+    onError: (err: any) => {
+      setError(err?.response?.data?.error || 'Could not propose this session. Please check the details and try again.');
+    },
+  });
+
+  const canSubmit = scholarId !== '' && date && startTime && endTime && title && !propose.isPending;
+
+  return (
+    <div className="fixed inset-0 bg-navy-900/40 flex items-center justify-center p-4 z-50" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-card p-6 w-full max-w-md space-y-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-navy-500">Propose a session</h3>
+          <button onClick={onClose} className="text-navy-500/40 hover:text-navy-500 transition-colors">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {!scholars.length ? (
+          <p className="text-xs text-navy-500/50">You have no actively matched scholars to propose a session to.</p>
+        ) : (
+          <>
+            <div>
+              <label className="text-[10px] font-semibold text-navy-500/40 uppercase tracking-wider block mb-1">Scholar</label>
+              <select value={scholarId} onChange={e => setScholarId(Number(e.target.value))} className={inputCls}>
+                {scholars.map(m => (
+                  <option key={m.scholar_id} value={m.scholar_id}>{m.scholar_name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="text-[10px] font-semibold text-navy-500/40 uppercase tracking-wider block mb-1">Date</label>
+                <input type="date" value={date} min={toLocalDT(new Date()).slice(0, 10)} onChange={e => setDate(e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-navy-500/40 uppercase tracking-wider block mb-1">Start</label>
+                <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-navy-500/40 uppercase tracking-wider block mb-1">End</label>
+                <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className={inputCls} />
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-navy-500/40 uppercase tracking-wider block mb-1">Session title</label>
+              <input value={title} onChange={e => setTitle(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-navy-500/40 uppercase tracking-wider block mb-1">Agenda / topics to discuss (optional)</label>
+              <textarea rows={3} value={agenda} onChange={e => setAgenda(e.target.value)}
+                className={`${inputCls} resize-none`}
+                placeholder="What would you like to discuss?" />
+            </div>
+
+            {error && <p className="text-xs text-red-500">{error}</p>}
+
+            <button onClick={() => { setError(''); propose.mutate(); }} disabled={!canSubmit}
+              className="w-full text-sm font-semibold bg-pink-500 text-white py-2.5 rounded-xl hover:bg-pink-600 disabled:opacity-50 transition-colors shadow-brand">
+              {propose.isPending ? 'Sending proposal…' : 'Propose session'}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function SessionsPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<'upcoming' | 'past' | 'availability' | 'book'>('upcoming');
+  const [showPropose, setShowPropose] = useState(false);
 
   const { data: sessions, isLoading } = useQuery<PaginatedResponse<MentoringSession>>({
     queryKey: ['sessions'],
@@ -738,14 +847,29 @@ export default function SessionsPage() {
       {/* Header */}
       <div className="relative rounded-2xl overflow-hidden bg-gradient-brand text-white px-8 py-8 mb-8 shadow-brand">
         <div className="absolute -top-8 -right-8 w-48 h-48 rounded-full bg-white/5" />
-        <div className="relative z-10">
-          <p className="text-xs font-semibold text-white/60 uppercase tracking-widest mb-1">Scheduling</p>
-          <h1 className="text-2xl font-extrabold">Sessions</h1>
-          <p className="mt-1 text-white/60 text-sm">
-            {isMentor ? 'Manage your mentoring sessions and availability.' : 'Book and manage your mentoring sessions.'}
-          </p>
+        <div className="relative z-10 flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-xs font-semibold text-white/60 uppercase tracking-widest mb-1">Scheduling</p>
+            <h1 className="text-2xl font-extrabold">Sessions</h1>
+            <p className="mt-1 text-white/60 text-sm">
+              {isMentor ? 'Manage your mentoring sessions and availability.' : 'Book and manage your mentoring sessions.'}
+            </p>
+          </div>
+          {isMentor && (
+            <button onClick={() => setShowPropose(true)}
+              className="text-xs font-semibold bg-white text-navy-500 px-4 py-2 rounded-lg hover:bg-white/90 transition-colors shadow-brand whitespace-nowrap">
+              + Propose a session
+            </button>
+          )}
         </div>
       </div>
+
+      {showPropose && user && (
+        <ProposeSessionModal
+          scholars={(user.mentor_profile?.active_matches ?? []).filter(m => m.is_active)}
+          onClose={() => setShowPropose(false)}
+        />
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 bg-white rounded-xl shadow-card p-1 mb-6 overflow-x-auto">

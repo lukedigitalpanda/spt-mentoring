@@ -1,5 +1,6 @@
 from django.db import transaction
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
@@ -109,19 +110,101 @@ class MentoringSessionViewSet(viewsets.ModelViewSet):
             '/sessions',
         )
 
+    @action(detail=False, methods=['post'])
+    def propose(self, request):
+        """Mentor proposes a session at a specific date/time for a scholar
+        they are actively matched with. Creates the AvailabilitySlot
+        directly (never via AvailabilitySlotViewSet.perform_create) so it
+        is booked from the outset and can never be absorbed by, or absorb,
+        another slot in the merge pass."""
+        user = request.user
+        if user.role != 'mentor':
+            return Response({'error': 'Only mentors can propose a session.'}, status=status.HTTP_403_FORBIDDEN)
+
+        from apps.users.models import MentoringMatch, User as UserModel
+        scholar_id = request.data.get('scholar')
+        try:
+            scholar = UserModel.objects.get(pk=scholar_id)
+        except (UserModel.DoesNotExist, TypeError, ValueError):
+            return Response({'error': 'Scholar not found.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        matched = MentoringMatch.objects.filter(mentor=user, scholar=scholar, is_active=True).exists()
+        if not matched:
+            return Response(
+                {'error': 'You are not actively matched with this scholar.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        start_time = parse_datetime(str(request.data.get('start_time') or ''))
+        end_time = parse_datetime(str(request.data.get('end_time') or ''))
+        if not start_time or not end_time:
+            return Response(
+                {'error': 'start_time and end_time are required and must be valid datetimes.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if timezone.is_naive(start_time):
+            start_time = timezone.make_aware(start_time)
+        if timezone.is_naive(end_time):
+            end_time = timezone.make_aware(end_time)
+
+        if start_time >= end_time:
+            return Response({'error': 'start_time must be before end_time.'}, status=status.HTTP_400_BAD_REQUEST)
+        if start_time <= timezone.now():
+            return Response({'error': 'start_time must be in the future.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        title = request.data.get('title') or 'Mentoring Session'
+        agenda = request.data.get('agenda', '')
+
+        with transaction.atomic():
+            slot = AvailabilitySlot.objects.create(
+                mentor=user, start_time=start_time, end_time=end_time, is_booked=True,
+            )
+            session = MentoringSession.objects.create(
+                mentor=user, scholar=scholar, slot=slot,
+                title=title, start_time=start_time, end_time=end_time,
+                agenda=agenda, status=MentoringSession.Status.PENDING,
+                created_by=user,
+            )
+
+        _notify(
+            scholar,
+            'session_request',
+            'Session proposed',
+            'Your mentor has proposed a session - review and confirm.',
+            '/sessions',
+        )
+        return Response(MentoringSessionSerializer(session).data, status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=['post'])
     def confirm(self, request, pk=None):
         session = self.get_object()
         user = request.user
-        if user != session.mentor and not (user.is_staff or user.role == 'admin'):
-            return Response({'error': 'Only the mentor can confirm.'}, status=status.HTTP_403_FORBIDDEN)
+        is_staff = user.is_staff or user.role == 'admin'
+        if not is_staff:
+            if session.created_by_id is None:
+                # Legacy sessions predating creator tracking: mentor confirms.
+                if user != session.mentor:
+                    return Response({'error': 'Only the mentor can confirm.'}, status=status.HTTP_403_FORBIDDEN)
+            else:
+                if user not in (session.mentor, session.scholar):
+                    return Response({'error': 'Not authorised.'}, status=status.HTTP_403_FORBIDDEN)
+                if user == session.created_by:
+                    return Response(
+                        {'error': 'You cannot confirm a session you proposed. Waiting for the other party.'},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
         session.status = MentoringSession.Status.CONFIRMED
         session.save(update_fields=['status'])
+        # Notify whichever participant did not just confirm it (defaulting
+        # to notifying the scholar, as before, when staff confirm on
+        # someone's behalf).
+        recipient = session.mentor if user == session.scholar else session.scholar
+        partner_name = session.scholar.full_name if recipient == session.mentor else session.mentor.full_name
         _notify(
-            session.scholar,
+            recipient,
             'session_confirmed',
             'Session confirmed!',
-            f"Your session with {session.mentor.full_name} on "
+            f"Your session with {partner_name} on "
             f"{session.start_time.strftime('%d %b at %H:%M')} is confirmed.",
             '/sessions',
         )

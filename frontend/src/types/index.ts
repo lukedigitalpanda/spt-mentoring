@@ -276,6 +276,7 @@ export interface MentoringSession {
   scholar_notes: string;
   duration_minutes: number;
   feedback: SessionFeedback[];
+  created_by: number | null;
   created_at: string;
 }
 

@@ -33,6 +33,6 @@ class MentoringSessionSerializer(serializers.ModelSerializer):
             'id', 'mentor', 'mentor_name', 'scholar', 'scholar_name',
             'slot', 'title', 'start_time', 'end_time', 'status',
             'meeting_url', 'agenda', 'mentor_notes', 'scholar_notes',
-            'duration_minutes', 'feedback', 'created_at',
+            'duration_minutes', 'feedback', 'created_by', 'created_at',
         ]
         read_only_fields = ['meeting_url', 'created_by', 'created_at']

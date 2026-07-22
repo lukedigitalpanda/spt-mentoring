@@ -244,10 +244,10 @@ function SessionCard({ session, currentUserId, onAction }: {
                 Mark complete
               </button>
             )}
-            {session.status !== 'pending' && session.status !== 'completed' && (
+            {session.status !== 'completed' && session.status !== 'cancelled' && !(isMentor && session.status === 'pending') && (
               <button onClick={() => onAction(session.id, 'cancel')}
                 className="text-xs font-medium text-navy-500/60 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
-                Cancel session
+                {session.status === 'pending' ? 'Withdraw request' : 'Cancel session'}
               </button>
             )}
             {!isMentor && session.status === 'confirmed' && !isUpcoming && (

@@ -7,7 +7,7 @@ import type { Conversation, Message } from '../types';
 
 // Touch-first devices get Enter-inserts-newline; sending is via the button only.
 const IS_COARSE_POINTER =
-  typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+  typeof window !== 'undefined' && (window.matchMedia?.('(pointer: coarse)').matches ?? false);
 
 function ReportForm({ onSubmit, onCancel, isPending }: {
   onSubmit: (description: string) => void;
@@ -229,6 +229,9 @@ export default function MessagesPage() {
         text: err?.response?.data?.detail || 'Your message could not be sent. Please try again.',
       });
       setDraft(body);
+      // setDraft is async, so the textarea's value (and thus scrollHeight)
+      // has not updated yet — defer the re-grow to the next frame.
+      requestAnimationFrame(() => autoGrow());
     }
   };
 

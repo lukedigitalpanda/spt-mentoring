@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 EMAILABLE_TYPES = {
     Notification.Type.MESSAGE,
     Notification.Type.SCHOLAR_FORUM_POST,
+    Notification.Type.FORUM_REPLY,
 }
 
 

@@ -115,6 +115,9 @@ class Post(models.Model):
     # Set once matched mentor(s) have been notified that this post became
     # visible, so edits/re-approvals never re-notify (N-2).
     mentor_notified = models.BooleanField(default=False)
+    # Set once earlier thread participants have been notified of this reply
+    # becoming visible, so edits/re-approvals never re-notify (P2-3b).
+    participants_notified = models.BooleanField(default=False)
 
     history = HistoricalRecords()
 

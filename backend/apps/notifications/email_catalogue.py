@@ -37,6 +37,15 @@ EMAIL_CATALOGUE = [
         debounced=True, source='apps/forums/services.py',
     ),
     EmailSpec(
+        key='forum_reply', name='Forum reply',
+        trigger='Someone replies in a forum thread you created or previously posted in',
+        recipients='Thread creator and earlier (visible) posters, excluding the replier',
+        subject='New reply in "{thread title}"',
+        body='{post excerpt}\n\n{link to /forums}',
+        debounced=True, source='apps/forums/services.py',
+        notes='Deduped against scholar_forum_post: a matched mentor who already got that notification for the same post is not also sent this one.',
+    ),
+    EmailSpec(
         key='notification_digest', name='Notification digest',
         trigger='Debounce window closes with 2+ unread pending notifications',
         recipients='The recipient of the batched notifications',
@@ -107,6 +116,7 @@ _CATEGORY_MATCHERS = [
     ('new notifications on SPT Mentoring', 'notification_digest'),
     ('New message from', 'message'),
     ('posted in the forum', 'scholar_forum_post'),
+    ('New reply in "', 'forum_reply'),
     ('You have been matched', 'match_assigned'),
     (NO_CONTACT_REMINDER_SUBJECT, 'no_contact_reminder'),
     (SPONSOR_UPDATE_SUBJECT, 'sponsor_update_reminder'),

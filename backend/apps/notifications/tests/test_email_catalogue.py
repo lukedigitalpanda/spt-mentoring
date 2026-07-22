@@ -6,8 +6,9 @@ class EmailCatalogueTests(TestCase):
         keys = [e.key for e in EMAIL_CATALOGUE]
         self.assertEqual(len(keys), len(set(keys)))
         self.assertEqual(set(keys), {
-            'message', 'scholar_forum_post', 'notification_digest', 'match_assigned', 'mass_message',
-            'no_contact_reminder', 'sponsor_update_reminder', 'moderation_alert', 'password_reset',
+            'message', 'scholar_forum_post', 'forum_reply', 'notification_digest', 'match_assigned',
+            'mass_message', 'no_contact_reminder', 'sponsor_update_reminder', 'moderation_alert',
+            'password_reset',
         })
 
     def test_fixed_entries_use_shared_constants(self):

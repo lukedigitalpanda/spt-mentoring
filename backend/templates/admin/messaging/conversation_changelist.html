@@ -1,0 +1,18 @@
+{% extends "admin/import_export/change_list.html" %}
+{% load i18n %}
+
+{# This template is the export-enabled changelist LEAF (wired via
+   ConversationAdmin.import_export_change_list_template). Being the leaf, its
+   block overrides render reliably — unlike a root parent injected through
+   import_export's dynamic `extends`, whose overrides get dropped.
+   We add a "Start new message" button and keep the Export + Add tools. #}
+{% block object-tools-items %}
+  {% include "admin/import_export/change_list_export_item.html" %}
+  <li>
+    <a href="start-conversation/" class="btn btn-success float-right"
+       style="background:#e01e8c;border-color:#e01e8c;">
+      <i class="fa fa-plus-circle"></i> &nbsp; Start new message
+    </a>
+  </li>
+  {{ block.super }}
+{% endblock %}

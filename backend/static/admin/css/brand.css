@@ -839,6 +839,15 @@ textarea, select, .vTextField {
   outline: none;
 }
 
+/* Override Django base.css which sets select { height: 1.875rem } — that fixed
+   height combined with our 9px top/bottom padding leaves only ~8px for the text
+   (when box-sizing:border-box), clipping the selected option.  height:auto lets
+   the browser size the element correctly around its content + padding. */
+select {
+  height: auto;
+  box-sizing: border-box;
+}
+
 input[type=text]:focus, input[type=password]:focus, input[type=email]:focus,
 input[type=url]:focus, input[type=number]:focus, input[type=tel]:focus,
 input[type=date]:focus, input[type=time]:focus, input[type=datetime-local]:focus,
@@ -921,6 +930,13 @@ textarea { resize: vertical; min-height: 100px; }
   color: #fff !important;
   border-radius: 10px;
   box-shadow: 0 2px 8px rgba(198,40,40,0.3) !important;
+}
+
+/* Override Django base.css which sets height:0.9375rem and line-height:0.9375rem
+   on .submit-row a.deletelink — too small for the text at our font size. */
+.submit-row a.deletelink {
+  height: 1.5rem !important;
+  line-height: 0.5rem !important;
 }
 .deletelink:hover, .deletelink-box a:hover {
   opacity: 0.88 !important;
@@ -1186,6 +1202,11 @@ textarea, select, .vTextField {
   background: #faf9fd !important;
   font-family: 'Inter', sans-serif !important;
 }
+
+select {
+  height: auto !important;
+  box-sizing: border-box !important;
+}
 input[type=text]:focus, input[type=password]:focus, input[type=email]:focus,
 input[type=url]:focus, input[type=number]:focus, input[type=date]:focus,
 input[type=time]:focus, textarea:focus, select:focus, .vTextField:focus {
@@ -1203,6 +1224,11 @@ ul.messagelist li.error   { background: #fff5f5 !important; border-left-color: #
 .deletelink, .deletelink-box a {
   background: linear-gradient(135deg,#c62828 0%,#e53935 100%) !important;
   color: #fff !important;
+}
+
+.submit-row a.deletelink {
+  height: 1.5rem !important;
+  line-height: 0.5rem !important;
 }
 
 /* Body background */

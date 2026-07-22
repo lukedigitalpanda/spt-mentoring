@@ -78,7 +78,7 @@ function groupBy<T>(arr: T[], key: (item: T) => string): Record<string, T[]> {
 }
 
 // ── Feedback form ─────────────────────────────────────────────────────────────
-function FeedbackForm({ session, onDone }: { session: MentoringSession; onDone: () => void }) {
+function FeedbackForm({ session, isMentor, onDone }: { session: MentoringSession; isMentor: boolean; onDone: () => void }) {
   const queryClient = useQueryClient();
   const [rating, setRating] = useState(0);
   const [highlights, setHighlights] = useState('');
@@ -98,7 +98,14 @@ function FeedbackForm({ session, onDone }: { session: MentoringSession; onDone: 
 
   return (
     <div className="bg-white rounded-2xl shadow-card p-6 space-y-5">
-      <h3 className="text-base font-bold text-navy-500">Rate your session</h3>
+      <div>
+        <h3 className="text-base font-bold text-navy-500">
+          {isMentor ? `Feedback on ${session.scholar_name}` : 'Rate your session'}
+        </h3>
+        <p className="text-xs text-navy-500/40 mt-0.5">
+          Your feedback is only visible to the programme team.
+        </p>
+      </div>
       <div>
         <p className="text-xs font-semibold text-navy-500/40 uppercase tracking-wider mb-2">Overall rating</p>
         <div className="flex gap-2">
@@ -111,19 +118,25 @@ function FeedbackForm({ session, onDone }: { session: MentoringSession; onDone: 
         </div>
       </div>
       <div>
-        <p className="text-xs font-semibold text-navy-500/40 uppercase tracking-wider mb-1">What went well?</p>
+        <p className="text-xs font-semibold text-navy-500/40 uppercase tracking-wider mb-1">
+          {isMentor ? 'What progress did the Scholar make?' : 'What went well?'}
+        </p>
         <textarea rows={2} value={highlights} onChange={e => setHighlights(e.target.value)}
           className="w-full border border-purple-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors resize-none"
-          placeholder="Highlights from the session…" />
+          placeholder={isMentor ? 'Notes on the Scholar\'s progress…' : 'Highlights from the session…'} />
       </div>
       <div>
-        <p className="text-xs font-semibold text-navy-500/40 uppercase tracking-wider mb-1">What could improve?</p>
+        <p className="text-xs font-semibold text-navy-500/40 uppercase tracking-wider mb-1">
+          {isMentor ? 'Any areas of concern or support needed?' : 'What could improve?'}
+        </p>
         <textarea rows={2} value={improvements} onChange={e => setImprovements(e.target.value)}
           className="w-full border border-purple-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors resize-none"
-          placeholder="Suggestions for next time…" />
+          placeholder={isMentor ? 'Any concerns or areas to flag with the team…' : 'Suggestions for next time…'} />
       </div>
       <div>
-        <p className="text-xs font-semibold text-navy-500/40 uppercase tracking-wider mb-2">Would you recommend this mentor?</p>
+        <p className="text-xs font-semibold text-navy-500/40 uppercase tracking-wider mb-2">
+          {isMentor ? 'Is the Scholar engaging with the mentoring support?' : 'Would you recommend this mentor?'}
+        </p>
         <div className="flex gap-2">
           {[true, false].map(v => (
             <button key={String(v)} type="button" onClick={() => setWouldRecommend(v)}
@@ -161,11 +174,12 @@ function SessionCard({ session, currentUserId, onAction }: {
   const isUpcoming = sessionStart > now;
   // Join button is available from 5 min before start until the session ends.
   const isJoinable = sessionStart.getTime() - 5 * 60_000 <= now.getTime() && sessionEnd > now;
+  const [joining, setJoining] = useState(false);
 
   return (
     <div className="bg-white rounded-2xl shadow-card p-5">
       {showFeedback ? (
-        <FeedbackForm session={session} onDone={() => setShowFeedback(false)} />
+        <FeedbackForm session={session} isMentor={isMentor} onDone={() => setShowFeedback(false)} />
       ) : (
         <>
           <div className="flex items-start justify-between gap-3 mb-3">
@@ -190,14 +204,27 @@ function SessionCard({ session, currentUserId, onAction }: {
           )}
 
           <div className="flex items-center gap-2 flex-wrap border-t border-purple-50 pt-3">
-            {session.status === 'confirmed' && isJoinable && session.meeting_url && (
-              <a href={session.meeting_url} target="_blank" rel="noopener noreferrer"
-                className="text-xs font-semibold bg-gradient-brand text-white px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity flex items-center gap-1">
+            {session.status === 'confirmed' && isJoinable && (
+              <button
+                type="button"
+                disabled={joining}
+                onClick={async () => {
+                  setJoining(true);
+                  try {
+                    const { data } = await api.get(`/sessions/sessions/${session.id}/join/`);
+                    window.open(data.url, '_blank', 'noopener,noreferrer');
+                  } catch {
+                    alert('Could not start the video call. Please try again in a moment.');
+                  } finally {
+                    setJoining(false);
+                  }
+                }}
+                className="text-xs font-semibold bg-gradient-brand text-white px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity flex items-center gap-1 disabled:opacity-60">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
-                Join Jitsi call
-              </a>
+                {joining ? 'Starting…' : 'Join video call'}
+              </button>
             )}
             {isMentor && session.status === 'pending' && (
               <>
@@ -222,6 +249,11 @@ function SessionCard({ session, currentUserId, onAction }: {
                 className="text-xs font-medium text-navy-500/60 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
                 Cancel session
               </button>
+            )}
+            {!isMentor && session.status === 'confirmed' && !isUpcoming && (
+              <span className="text-xs text-navy-500/40 ml-auto">
+                Waiting for mentor to mark complete, then you can leave feedback.
+              </span>
             )}
             {session.status === 'completed' && !alreadyFeedback && (
               <button onClick={() => setShowFeedback(true)}

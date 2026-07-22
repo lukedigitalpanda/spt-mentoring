@@ -14,11 +14,12 @@ class GoalSerializer(serializers.ModelSerializer):
     milestone_count = serializers.IntegerField(read_only=True)
     completed_milestone_count = serializers.IntegerField(read_only=True)
     progress_percent = serializers.IntegerField(read_only=True)
+    user_name = serializers.CharField(source='user.full_name', read_only=True)
 
     class Meta:
         model = Goal
         fields = [
-            'id', 'user', 'title', 'description', 'category', 'status',
+            'id', 'user', 'user_name', 'title', 'description', 'category', 'status',
             'due_date', 'created_at', 'completed_at',
             'milestones', 'milestone_count', 'completed_milestone_count', 'progress_percent',
         ]

@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import BrandLogo from '../ui/BrandLogo';
 import api from '../../utils/api';
+import { userHasRole } from '../../utils/roles';
 
 const navItems = [
   { path: '/',           label: 'Home',             roles: ['scholar','mentor','sponsor','alumni'] },
@@ -14,7 +15,7 @@ const navItems = [
   { path: '/mentors',    label: 'Find a Mentor',    roles: ['scholar','alumni'] },
   { path: '/forums',     label: 'Forums',           roles: ['scholar','mentor','alumni'] },
   { path: '/resources',  label: 'Resources',        roles: ['scholar','mentor','sponsor','alumni'] },
-  { path: '/surveys',    label: 'Surveys',          roles: ['scholar','mentor'] },
+  { path: '/surveys',    label: 'Surveys',          roles: ['scholar','mentor','alumni'] },
   { path: '/news',       label: 'News',             roles: ['scholar','mentor','sponsor','alumni'] },
   { path: '/admin',      label: 'Admin',            roles: ['admin'] },
 ];
@@ -50,6 +51,50 @@ function NotificationBell() {
         </span>
       )}
     </button>
+  );
+}
+
+function ImpersonationBanner() {
+  const { user } = useAuth();
+  const isImpersonating =
+    !!localStorage.getItem('impersonation_active') ||
+    !!localStorage.getItem('admin_access_token');
+
+  if (!isImpersonating) return null;
+
+  const stop = () => {
+    const access  = localStorage.getItem('admin_access_token');
+    const refresh = localStorage.getItem('admin_refresh_token');
+    if (access && refresh) {
+      // Admin also had a React session in this browser — restore it.
+      localStorage.setItem('access_token',  access);
+      localStorage.setItem('refresh_token', refresh);
+    } else {
+      // Admin came straight from the Django admin (session auth) — just drop
+      // the impersonated tokens; their admin session cookie is still valid.
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+    }
+    localStorage.removeItem('admin_access_token');
+    localStorage.removeItem('admin_refresh_token');
+    localStorage.removeItem('impersonation_active');
+    window.location.href = '/admin/users/user/';
+  };
+
+  return (
+    <div style={{ background: '#e01e8c' }} className="px-4 py-2 flex items-center justify-between gap-4">
+      <p className="text-xs font-semibold text-white">
+        Impersonating <span className="underline">{user?.full_name}</span>
+        {user?.role && <span className="ml-1.5 opacity-70 capitalize">({user.role})</span>}
+        &nbsp;&mdash; changes you make will affect this user&apos;s real account.
+      </p>
+      <button
+        onClick={stop}
+        className="flex-shrink-0 text-xs font-bold bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-lg transition-colors border border-white/30"
+      >
+        Stop impersonating
+      </button>
+    </div>
   );
 }
 
@@ -97,8 +142,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const handleLogout = () => { logout(); navigate('/login'); };
   const visibleNav = navItems.filter(i => {
-    if (!user || !i.roles.includes(user.role)) return false;
-    if (i.path === '/mentors' && user.has_mentor) return false;
+    if (!user || !i.roles.some(r => userHasRole(user, r as any))) return false;
     return true;
   });
 
@@ -108,6 +152,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <div className="bg-gradient-brand text-white text-xs py-1.5 text-center font-medium tracking-wide">
         Helping young people become future engineers
       </div>
+
+      {/* ── Admin impersonation banner ── */}
+      <ImpersonationBanner />
 
       {/* ── Push notification permission prompt ── */}
       <PushPromptBanner />

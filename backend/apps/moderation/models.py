@@ -33,6 +33,9 @@ class ModerationTerm(models.Model):
         REGEX = 'REGEX', _('Regex')
         EMAIL_PATTERN = 'EMAIL_PATTERN', _('Email Pattern')
         URL_FRAGMENT = 'URL_FRAGMENT', _('URL Fragment')
+        EMOJI_SINGLE = 'EMOJI_SINGLE', _('Emoji Single')
+        EMOJI_COMBO = 'EMOJI_COMBO', _('Emoji Combination')
+        EMOJI_OR_SET = 'EMOJI_OR_SET', _('Emoji OR Set')
 
     class Category(models.TextChoices):
         PROFANITY = 'PROFANITY', _('Profanity')

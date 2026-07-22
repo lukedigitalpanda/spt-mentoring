@@ -33,7 +33,7 @@ class ConversationSerializer(serializers.ModelSerializer):
         model = Conversation
         fields = [
             'id', 'conversation_type', 'participants', 'participant_names', 'participant_details',
-            'subject', 'created_at', 'is_private', 'cohort',
+            'subject', 'created_at', 'is_private', 'cohort', 'replies_enabled',
             'last_message', 'unread_count',
         ]
 

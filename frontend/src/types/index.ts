@@ -1,5 +1,29 @@
 export type Role = 'scholar' | 'mentor' | 'sponsor' | 'alumni' | 'admin';
 
+export interface UserCohort {
+  cohort_id: number;
+  cohort_name: string;
+  cohort_year: number;
+  programme_id: number;
+  programme_name: string;
+  is_active: boolean;
+}
+
+export interface ActiveMatch {
+  scholar_id: number;
+  scholar_name: string;
+  matched_on: string;
+  is_active: boolean;
+  cohort_name: string | null;
+  programme_name: string | null;
+}
+
+export interface MatchedMentor {
+  mentor_id: number;
+  mentor_name: string;
+  matched_on: string;
+}
+
 export interface User {
   id: number;
   email: string;
@@ -8,11 +32,13 @@ export interface User {
   last_name: string;
   full_name: string;
   role: Role;
+  secondary_roles: Role[];
   phone: string;
   bio: string;
   profile_picture: string | null;
   location: string;
   engineering_discipline: string;
+  engineering_disciplines: string[];
   interests: string[];
   is_verified: boolean;
   crm_id: string;
@@ -22,6 +48,7 @@ export interface User {
   scholar_profile?: ScholarProfile;
   sponsor_profile?: SponsorProfile;
   has_mentor: boolean;
+  cohorts: UserCohort[];
 }
 
 export interface MentorProfile {
@@ -33,6 +60,7 @@ export interface MentorProfile {
   availability: string;
   current_scholar_count: number;
   has_capacity: boolean;
+  active_matches: ActiveMatch[];
 }
 
 export interface ScholarProfile {
@@ -42,14 +70,17 @@ export interface ScholarProfile {
   graduation_year: number | null;
   scholarship_reference: string;
   sponsor: number | null;
+  sponsor_name: string | null;
   goals: string;
   soft_skills_current: Record<string, number>;
+  matched_mentor: MatchedMentor | null;
 }
 
 export interface SponsorProfile {
   organisation: string;
   contact_name: string;
   update_frequency_days: number;
+  sponsored_scholars: { id: number; full_name: string }[];
 }
 
 export interface Message {
@@ -66,13 +97,25 @@ export interface Message {
 
 export interface Conversation {
   id: number;
-  conversation_type: 'direct' | 'group' | 'sponsor_update';
+  conversation_type: 'direct' | 'group' | 'sponsor_update' | 'mass_message';
   participants: number[];
   participant_names: string[];
   subject: string;
   created_at: string;
+  replies_enabled: boolean;
   last_message: { id: number; body: string; sent_at: string; sender: string } | null;
   unread_count: number;
+}
+
+export interface PromotionalBanner {
+  id: number;
+  title: string;
+  subtitle: string;
+  image: string;
+  link_url: string;
+  link_text: string;
+  order: number;
+  is_active: boolean;
 }
 
 export interface NewsItem {
@@ -140,6 +183,7 @@ export interface Resource {
   url: string;
   audience: 'all' | 'scholar' | 'mentor' | 'sponsor' | 'admin';
   download_count: number;
+  created_at: string;
 }
 
 export interface Survey {
@@ -237,7 +281,7 @@ export interface MentoringSession {
 export type NotificationType =
   | 'session_request' | 'session_confirmed' | 'session_cancelled'
   | 'session_reminder' | 'session_feedback' | 'message'
-  | 'match' | 'forum_reply' | 'survey' | 'goal' | 'system';
+  | 'match' | 'forum_reply' | 'survey' | 'goal' | 'news_item' | 'system';
 
 export interface Notification {
   id: number;
@@ -263,6 +307,7 @@ export interface GoalMilestone {
 export interface Goal {
   id: number;
   user: number;
+  user_name: string;
   title: string;
   description: string;
   category: 'career' | 'technical' | 'personal' | 'academic' | 'networking' | 'other';

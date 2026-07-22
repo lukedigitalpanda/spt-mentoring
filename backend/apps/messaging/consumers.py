@@ -13,7 +13,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         self.room_group_name = f'chat_{self.conversation_id}'
         user = self.scope['user']
 
-        if not user.is_authenticated:
+        if not user.is_authenticated or not user.is_active:
             await self.close()
             return
 
@@ -36,6 +36,25 @@ class ChatConsumer(AsyncWebsocketConsumer):
             return
 
         user = self.scope['user']
+        if not user.is_active:
+            await self.send(text_data=json.dumps({
+                'type': 'message_blocked',
+                'reason': 'Your account is inactive and cannot send messages.',
+            }))
+            return
+
+        # Block new messages when the mentoring relationship is inactive.
+        # Checks ALL MentoringMatch records between the sender and each other
+        # participant — a message is only permitted if at least one active match
+        # exists.  This mirrors the guard in MessageViewSet.create().
+        match_blocked = await self._is_match_blocked(user, self.conversation_id)
+        if match_blocked:
+            await self.send(text_data=json.dumps({
+                'type': 'message_blocked',
+                'reason': 'You cannot send messages as your mentoring relationship is no longer active.',
+            }))
+            return
+
         message, result = await self._create_and_moderate(user, self.conversation_id, body)
 
         if result.status == 'blocked':
@@ -67,6 +86,33 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     async def chat_message(self, event):
         await self.send(text_data=json.dumps(event))
+
+    @database_sync_to_async
+    def _is_match_blocked(self, user, conversation_id):
+        """Return True if the user should be blocked from sending to this conversation.
+
+        For DIRECT conversations only: checks whether every MentoringMatch
+        between the sender and each other participant is inactive.  If no
+        MentoringMatch records exist for a given pair the check is skipped
+        (e.g. admin/support conversations are not restricted).
+        """
+        from .models import Conversation
+        from apps.users.models import MentoringMatch
+        from django.db.models import Q
+        try:
+            conv = Conversation.objects.get(pk=conversation_id)
+        except Conversation.DoesNotExist:
+            return False
+        if conv.conversation_type != Conversation.ConversationType.DIRECT:
+            return False
+        for other in conv.participants.exclude(pk=user.pk):
+            match_qs = MentoringMatch.objects.filter(
+                Q(scholar=user, mentor=other) |
+                Q(scholar=other, mentor=user)
+            )
+            if match_qs.exists() and not match_qs.filter(is_active=True).exists():
+                return True
+        return False
 
     @database_sync_to_async
     def _is_participant(self, user, conversation_id):

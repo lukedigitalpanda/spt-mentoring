@@ -1,0 +1,312 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}Matching Wizard — {{ site_title }}{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+  .wizard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .wizard-panel { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
+  .wizard-panel-header { background: #e01e8c; color: #fff; padding: 10px 16px; font-weight: 700; font-size: 13px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .wizard-panel-header.mentor-header { background: #3b1fa3; }
+  .filter-bar { padding: 8px 16px; border-bottom: 1px solid #f0f0f0; background: #fafafa; display: flex; align-items: center; gap: 8px; font-size: 12px; flex-wrap: wrap; flex-shrink: 0; }
+  .filter-bar input[type=search] { flex: 1; min-width: 120px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; }
+  .filter-bar select { padding: 3px 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; }
+  .scroll-list { overflow-y: auto; max-height: 340px; }
+  .scholar-row, .mentor-row { padding: 10px 16px; border-bottom: 1px solid #f0f0f0; font-size: 12px; cursor: pointer; transition: background 0.1s; }
+  .scholar-row:hover { background: #fef0f7; }
+  .mentor-row:hover { background: #f0eeff; }
+  .scholar-row.selected { background: #fde8f4; border-left: 4px solid #e01e8c; }
+  .mentor-row.selected { background: #ebe6ff; border-left: 4px solid #3b1fa3; }
+  .discipline-badge { display: inline-block; background: #f3f0ff; color: #5b2dd4; padding: 1px 7px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-right: 4px; }
+  .capacity-badge { display: inline-block; background: #e8f5e9; color: #2e7d32; padding: 1px 7px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .no-capacity { background: #fce4ec; color: #c62828; }
+  .matched-badge { display: inline-block; background: #e3f2fd; color: #1565c0; padding: 1px 7px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-right: 4px; }
+  .unmatched-badge { display: inline-block; background: #fff8e1; color: #e65100; padding: 1px 7px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-right: 4px; }
+  #match-form { margin-top: 24px; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; }
+  #match-form h3 { margin-top: 0; color: #3b1fa3; font-size: 14px; }
+  #match-form select { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; min-width: 220px; }
+  .btn-create { background: #e01e8c; color: #fff; border: none; padding: 8px 24px; border-radius: 4px; font-weight: 700; cursor: pointer; font-size: 13px; }
+  .btn-create:hover { background: #c0186e; }
+  .btn-deactivate { background: #fff; color: #c62828; border: 1px solid #c62828; padding: 6px 16px; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 12px; margin-left: 8px; }
+  .btn-deactivate:hover { background: #fce4ec; }
+  .empty-state { padding: 24px; text-align: center; color: #888; font-size: 13px; }
+  .match-summary { font-size: 11px; color: #666; margin-top: 3px; }
+  #preview-panel { margin-top: 16px; padding: 14px 18px; background: #f3f0ff; border-radius: 6px; border: 1px solid #d0c5ff; display: none; font-size: 13px; }
+  #preview-panel strong { color: #3b1fa3; }
+  .existing-match-warning { background: #fff3e0; border: 1px solid #ffcc80; border-radius: 4px; padding: 8px 12px; margin-top: 8px; font-size: 12px; color: #e65100; }
+  .show-all-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <h1 style="margin-bottom:4px;">Matching Wizard</h1>
+  <p style="color:#666;font-size:13px;margin-bottom:20px;">Click a scholar, then a mentor to prepare a match. Scholars already matched are shown with their current mentor — you can reassign or deactivate from here too.</p>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="{% if message.tags %}{{ message.tags }}{% endif %}" style="padding:10px 14px;margin-bottom:16px;border-radius:6px;font-size:13px;{% if 'success' in message.tags %}background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;{% elif 'error' in message.tags %}background:#fce4ec;color:#c62828;border:1px solid #ef9a9a;{% endif %}">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="wizard-grid">
+    <!-- Scholars -->
+    <div class="wizard-panel">
+      <div class="wizard-panel-header">
+        Scholars
+        <span style="background:rgba(255,255,255,0.25);border-radius:12px;padding:1px 9px;font-size:11px;" id="scholar-count">{{ scholars|length }}</span>
+      </div>
+      <div class="filter-bar">
+        <input type="search" id="scholar-search" placeholder="Search name / email…" oninput="filterScholars()">
+        <select id="scholar-discipline-filter" onchange="filterScholars()">
+          <option value="">All disciplines</option>
+          {% for d in disciplines %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+        </select>
+        <label class="show-all-toggle">
+          <input type="checkbox" id="show-matched-scholars" onchange="filterScholars()" checked>
+          Matched
+        </label>
+        <label class="show-all-toggle">
+          <input type="checkbox" id="show-unmatched-scholars" onchange="filterScholars()" checked>
+          Unmatched
+        </label>
+      </div>
+      <div class="scroll-list" id="scholars-list">
+        {% for s in scholars %}
+          {% with match=s.active_matches.0 %}
+          <div class="scholar-row" id="scholar-{{ s.pk }}"
+               data-pk="{{ s.pk }}"
+               data-name="{{ s.full_name }}"
+               data-disc="{{ s.engineering_discipline }}"
+               data-is-matched="{% if match %}1{% else %}0{% endif %}"
+               data-match-id="{% if match %}{{ match.pk }}{% endif %}"
+               data-mentor-name="{% if match %}{{ match.mentor.full_name|escapejs }}{% endif %}"
+               onclick="selectScholar({{ s.pk }}, '{{ s.full_name|escapejs }}', '{{ s.engineering_discipline|escapejs }}', {% if match %}{{ match.pk }}, '{{ match.mentor.full_name|escapejs }}'{% else %}null, null{% endif %})">
+            <strong>{{ s.full_name }}</strong>
+            {% if match %}
+              <span class="matched-badge">✓ matched</span>
+            {% else %}
+              <span class="unmatched-badge">unmatched</span>
+            {% endif %}
+            {% if s.engineering_discipline %}
+              <span class="discipline-badge">{{ s.engineering_discipline }}</span>
+            {% endif %}
+            <div class="match-summary">{{ s.email }}{% if match %} — {{ match.mentor.full_name }}{% endif %}</div>
+          </div>
+          {% endwith %}
+        {% empty %}
+          <div class="empty-state">No scholars found.</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Mentors -->
+    <div class="wizard-panel">
+      <div class="wizard-panel-header mentor-header">
+        Mentors &amp; Alumni
+        <span style="background:rgba(255,255,255,0.25);border-radius:12px;padding:1px 9px;font-size:11px;" id="mentor-count">{{ mentors|length }}</span>
+      </div>
+      <div class="filter-bar">
+        <input type="search" id="mentor-search" placeholder="Search name / email…" oninput="filterMentors()">
+        <select id="mentor-discipline-filter" onchange="filterMentors()">
+          <option value="">All disciplines</option>
+          {% for d in disciplines %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+        </select>
+        <label class="show-all-toggle">
+          <input type="checkbox" id="show-full-mentors" onchange="filterMentors()">
+          Show full
+        </label>
+      </div>
+      <div class="scroll-list" id="mentors-list">
+        {% for m in mentors %}
+          <div class="mentor-row" id="mentor-{{ m.pk }}"
+               data-pk="{{ m.pk }}"
+               data-name="{{ m.full_name }}"
+               data-disc="{{ m.engineering_discipline }}"
+               data-at-capacity="{% if m.active_match_count >= m.mentor_profile.max_scholars %}1{% else %}0{% endif %}"
+               onclick="selectMentor({{ m.pk }}, '{{ m.full_name|escapejs }}')">
+            <strong>{{ m.full_name }}</strong>
+            {% if m.engineering_discipline %}
+              <span class="discipline-badge">{{ m.engineering_discipline }}</span>
+            {% endif %}
+            {% if m.mentor_profile %}
+              {% if m.active_match_count < m.mentor_profile.max_scholars %}
+                <span class="capacity-badge">{{ m.active_match_count }}/{{ m.mentor_profile.max_scholars }}</span>
+              {% else %}
+                <span class="capacity-badge no-capacity">Full ({{ m.active_match_count }}/{{ m.mentor_profile.max_scholars }})</span>
+              {% endif %}
+            {% endif %}
+            <div class="match-summary">{{ m.mentor_profile.job_title|default:'' }}{% if m.mentor_profile.company %} · {{ m.mentor_profile.company }}{% endif %}</div>
+          </div>
+        {% empty %}
+          <div class="empty-state">No mentors found.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Preview + action panel -->
+  <div id="preview-panel">
+    <div id="preview-text">Select a scholar and mentor above to preview a match.</div>
+    <div id="existing-match-warning" class="existing-match-warning" style="display:none;"></div>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <form method="post" id="create-match-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="create_match">
+        <input type="hidden" name="scholar_id" id="hidden-scholar-id">
+        <input type="hidden" name="mentor_id" id="hidden-mentor-id">
+        <button type="submit" class="btn-create" id="create-btn" disabled>Create Match</button>
+      </form>
+      <form method="post" id="deactivate-match-form" style="display:none;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="deactivate_match">
+        <input type="hidden" name="match_id" id="hidden-match-id">
+        <button type="submit" class="btn-deactivate">Deactivate Current Match</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Hidden fallback form (no-JS) -->
+  <noscript>
+  <div id="match-form">
+    <h3>Create Match (manual)</h3>
+    <form method="post">
+      {% csrf_token %}
+      <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;">
+        <div>
+          <label style="display:block;font-size:12px;margin-bottom:4px;font-weight:600;">Scholar</label>
+          <select name="scholar_id" required>
+            <option value="">— select scholar —</option>
+            {% for s in scholars %}<option value="{{ s.pk }}">{{ s.full_name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label style="display:block;font-size:12px;margin-bottom:4px;font-weight:600;">Mentor</label>
+          <select name="mentor_id" required>
+            <option value="">— select mentor —</option>
+            {% for m in mentors %}<option value="{{ m.pk }}">{{ m.full_name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div><button type="submit" name="action" value="create_match" class="btn-create">Create Match</button></div>
+      </div>
+    </form>
+  </div>
+  </noscript>
+</div>
+
+<script>
+var selectedScholar = null;
+var selectedMentor = null;
+
+function selectScholar(pk, name, disc, matchId, mentorName) {
+  document.querySelectorAll('.scholar-row').forEach(r => r.classList.remove('selected'));
+  var row = document.getElementById('scholar-' + pk);
+  if (row) row.classList.add('selected');
+  selectedScholar = { pk: pk, name: name, disc: disc, matchId: matchId, mentorName: mentorName };
+  document.getElementById('hidden-scholar-id').value = pk;
+  // Auto-filter mentors by discipline
+  if (disc) {
+    var mf = document.getElementById('mentor-discipline-filter');
+    mf.value = disc;
+    filterMentors();
+  }
+  updatePreview();
+}
+
+function selectMentor(pk, name) {
+  document.querySelectorAll('.mentor-row').forEach(r => r.classList.remove('selected'));
+  var row = document.getElementById('mentor-' + pk);
+  if (row) row.classList.add('selected');
+  selectedMentor = { pk: pk, name: name };
+  document.getElementById('hidden-mentor-id').value = pk;
+  updatePreview();
+}
+
+function updatePreview() {
+  var panel = document.getElementById('preview-panel');
+  var text = document.getElementById('preview-text');
+  var warning = document.getElementById('existing-match-warning');
+  var createBtn = document.getElementById('create-btn');
+  var deactivateForm = document.getElementById('deactivate-match-form');
+  var hiddenMatchId = document.getElementById('hidden-match-id');
+
+  if (!selectedScholar && !selectedMentor) {
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = 'block';
+
+  var scholarLabel = selectedScholar ? '<strong>' + esc(selectedScholar.name) + '</strong>' : '<em>no scholar selected</em>';
+  var mentorLabel = selectedMentor ? '<strong>' + esc(selectedMentor.name) + '</strong>' : '<em>no mentor selected</em>';
+  text.innerHTML = 'Match: ' + scholarLabel + ' ↔ ' + mentorLabel;
+
+  // Existing match warning
+  if (selectedScholar && selectedScholar.matchId) {
+    warning.style.display = '';
+    warning.textContent = '⚠ ' + selectedScholar.name + ' is currently matched with ' + selectedScholar.mentorName + '. Creating a new match will add an additional match (both will be active). Use "Deactivate Current Match" first if you want to reassign.';
+    hiddenMatchId.value = selectedScholar.matchId;
+    deactivateForm.style.display = '';
+  } else {
+    warning.style.display = 'none';
+    deactivateForm.style.display = 'none';
+  }
+
+  createBtn.disabled = !(selectedScholar && selectedMentor);
+}
+
+function esc(str) {
+  var d = document.createElement('div');
+  d.appendChild(document.createTextNode(str));
+  return d.innerHTML;
+}
+
+function filterScholars() {
+  var search = document.getElementById('scholar-search').value.toLowerCase();
+  var disc = document.getElementById('scholar-discipline-filter').value.toLowerCase();
+  var showMatched = document.getElementById('show-matched-scholars').checked;
+  var showUnmatched = document.getElementById('show-unmatched-scholars').checked;
+  var visible = 0;
+  document.querySelectorAll('.scholar-row').forEach(function(r) {
+    var name = r.getAttribute('data-name').toLowerCase();
+    var email = r.querySelector('.match-summary') ? r.querySelector('.match-summary').textContent.toLowerCase() : '';
+    var d = r.getAttribute('data-disc').toLowerCase();
+    var isMatched = r.getAttribute('data-is-matched') === '1';
+    var matchesSearch = !search || name.includes(search) || email.includes(search);
+    var matchesDisc = !disc || d.includes(disc);
+    var matchesToggle = (isMatched && showMatched) || (!isMatched && showUnmatched);
+    var show = matchesSearch && matchesDisc && matchesToggle;
+    r.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  document.getElementById('scholar-count').textContent = visible;
+}
+
+function filterMentors() {
+  var search = document.getElementById('mentor-search').value.toLowerCase();
+  var disc = document.getElementById('mentor-discipline-filter').value.toLowerCase();
+  var showFull = document.getElementById('show-full-mentors').checked;
+  var visible = 0;
+  document.querySelectorAll('.mentor-row').forEach(function(r) {
+    var name = r.getAttribute('data-name').toLowerCase();
+    var d = r.getAttribute('data-disc').toLowerCase();
+    var atCapacity = r.getAttribute('data-at-capacity') === '1';
+    var matchesSearch = !search || name.includes(search);
+    var matchesDisc = !disc || d.includes(disc);
+    var matchesCapacity = !atCapacity || showFull;
+    var show = matchesSearch && matchesDisc && matchesCapacity;
+    r.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  document.getElementById('mentor-count').textContent = visible;
+}
+
+// On load: hide full mentors by default
+document.addEventListener('DOMContentLoaded', function() {
+  filterMentors();
+});
+</script>
+{% endblock %}

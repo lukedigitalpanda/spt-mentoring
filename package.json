@@ -1,0 +1,11 @@
+{
+  "name": "spt-mentoring",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "worker:start": "node /root/.claude/plugins/cache/thedotmack/claude-mem/10.6.2/scripts/worker-cli.js start",
+    "worker:stop": "node /root/.claude/plugins/cache/thedotmack/claude-mem/10.6.2/scripts/worker-cli.js stop",
+    "worker:restart": "node /root/.claude/plugins/cache/thedotmack/claude-mem/10.6.2/scripts/worker-cli.js restart",
+    "worker:status": "node /root/.claude/plugins/cache/thedotmack/claude-mem/10.6.2/scripts/worker-cli.js status"
+  }
+}

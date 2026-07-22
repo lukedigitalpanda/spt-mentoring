@@ -44,7 +44,17 @@ class Resource(models.Model):
     category = models.ForeignKey(ResourceCategory, on_delete=models.SET_NULL, null=True, blank=True, related_name='resources')
     file = models.FileField(upload_to='resources/', blank=True, null=True)
     url = models.URLField(blank=True)
-    audience = models.CharField(max_length=20, choices=Audience.choices, default=Audience.ALL)
+    audience = models.CharField(
+        max_length=20, choices=Audience.choices, default=Audience.ALL,
+        help_text='Legacy single-audience field. Use audience_list for multi-audience targeting.',
+    )
+    audience_list = models.JSONField(
+        default=list, blank=True,
+        help_text=(
+            'Select one or more audiences. When set, this overrides the legacy audience field. '
+            'E.g. ["scholar", "mentor"] to target scholars and mentors without including sponsors.'
+        ),
+    )
     programme = models.ForeignKey(
         'cohorts.Programme', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='resources'
@@ -74,6 +84,12 @@ class SharedDocument(models.Model):
     message = models.TextField(blank=True)
     is_deleted_by_sender = models.BooleanField(default=False)
     is_deleted_by_recipient = models.BooleanField(default=False)
+
+    class Meta:
+        # Newest first. Without explicit ordering, PageNumberPagination yields an
+        # inconsistent order, so a freshly uploaded document could land off page 1
+        # (which is the only page the profile page fetches) and appear to vanish.
+        ordering = ['-shared_at']
 
     def __str__(self):
         return f'{self.filename} ({self.shared_by.full_name} → {self.shared_with.full_name})'

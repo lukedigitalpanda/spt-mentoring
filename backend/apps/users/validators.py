@@ -2,15 +2,38 @@ import os
 from django.core.exceptions import ValidationError
 
 ALLOWED_IMAGE_TYPES = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
-ALLOWED_ATTACHMENT_TYPES = ALLOWED_IMAGE_TYPES | {'application/pdf'}
+ALLOWED_ATTACHMENT_TYPES = ALLOWED_IMAGE_TYPES | {
+    'application/pdf',
+    # Word
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    # Excel
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    # PowerPoint
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    # Plain text / CSV
+    'text/plain',
+    'text/csv',
+    'application/csv',
+}
 MAX_PROFILE_PICTURE_BYTES = 5 * 1024 * 1024   # 5 MB
-MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024        # 10 MB
+MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024        # 20 MB
 
 # Map common extensions to MIME types for the magic-byte-free fallback
 _EXT_TO_MIME = {
     '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
     '.png': 'image/png', '.webp': 'image/webp',
     '.gif': 'image/gif', '.pdf': 'application/pdf',
+    '.doc': 'application/msword',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.xls': 'application/vnd.ms-excel',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.ppt': 'application/vnd.ms-powerpoint',
+    '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    '.txt': 'text/plain',
+    '.csv': 'text/csv',
 }
 
 
@@ -34,6 +57,9 @@ def validate_profile_picture(file):
 def validate_message_attachment(file):
     ct = _get_content_type(file)
     if ct not in ALLOWED_ATTACHMENT_TYPES:
-        raise ValidationError('Attachments must be an image or PDF.')
+        raise ValidationError(
+            'Attachments must be an image, PDF, Word document, Excel spreadsheet, '
+            'PowerPoint presentation, plain text, or CSV file.'
+        )
     if file.size > MAX_ATTACHMENT_BYTES:
-        raise ValidationError('Attachment must be 10 MB or smaller.')
+        raise ValidationError('Attachment must be 20 MB or smaller.')

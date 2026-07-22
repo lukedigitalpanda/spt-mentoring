@@ -130,7 +130,7 @@ function SurveyForm({ survey, onDone }: { survey: Survey; onDone: () => void }) 
   const [submitted, setSubmitted] = useState(false);
 
   const submitMutation = useMutation({
-    mutationFn: (payload: { answers: { question: number; answer_text: string }[] }) =>
+    mutationFn: (payload: { answers: { question: number; value: string }[] }) =>
       api.post(`/surveys/surveys/${survey.id}/submit/`, payload),
     onSuccess: () => {
       setSubmitted(true);

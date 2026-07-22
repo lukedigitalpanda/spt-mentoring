@@ -7,7 +7,18 @@ class ResourceCategorySerializer(serializers.ModelSerializer):
     children_count = serializers.SerializerMethodField()
 
     def get_resource_count(self, obj):
-        return obj.resources.filter(is_active=True).count()
+        qs = obj.resources.filter(is_active=True)
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            user = request.user
+            if not (user.is_staff or getattr(user, 'role', None) == 'admin'):
+                from django.db.models import Q
+                qs = qs.filter(
+                    Q(audience_list=[], audience__in=['all', user.role]) |
+                    Q(audience_list__contains=[user.role]) |
+                    Q(audience_list__contains=['all'])
+                )
+        return qs.count()
 
     def get_children_count(self, obj):
         return obj.children.count()
@@ -35,3 +46,6 @@ class SharedDocumentSerializer(serializers.ModelSerializer):
         model = SharedDocument
         fields = '__all__'
         read_only_fields = ['shared_by', 'shared_at']
+        # Recipient may instead be given as shared_with_email; the view resolves
+        # it and guarantees one or the other is present.
+        extra_kwargs = {'shared_with': {'required': False}}

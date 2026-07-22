@@ -58,13 +58,54 @@ fieldset {
 .aligned .form-row textarea {
   width: 100% !important;
   max-width: 520px !important;
+  height: auto !important;
   box-sizing: border-box !important;
+}
+
+/* ── Select height fix ───────────────────────────────────────────────────────
+   Django admin sometimes renders <select> elements with an explicit height
+   that clips the displayed text (especially on Windows/Chrome).  Force a
+   sensible minimum height so the selected option is always fully visible.
+*/
+select,
+.aligned .form-row select,
+.inline-related .form-row select,
+.inline-related select,
+#changelist-filter select,
+.related-widget-wrapper select {
+  min-height: 36px !important;
+  height: auto !important;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+  line-height: 1.4 !important;
+}
+
+/* Multi-select (filter_horizontal source/destination lists) */
+select[multiple],
+.aligned .form-row select[multiple] {
+  min-height: 120px !important;
+  height: auto !important;
+  padding: 4px !important;
 }
 
 /* Standalone selects outside aligned (e.g. inline stacked) */
 .inline-related .form-row select {
   min-width: 180px !important;
   max-width: 100% !important;
+}
+
+/* ── L4: horizontal scrollbar at the top of changelist tables ───────────────
+   Technique: flip the .results wrapper 180° so the scrollbar moves to the
+   top, then un-flip the table inside so content appears right-way up.
+   No JavaScript required.
+*/
+#changelist .results {
+  overflow-x: auto !important;
+  transform: rotateX(180deg);
+}
+
+#changelist .results table {
+  transform: rotateX(180deg);
 }
 
 /* ── Submit row ──────────────────────────────────────────────── */

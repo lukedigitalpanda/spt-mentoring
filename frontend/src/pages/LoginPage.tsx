@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import BrandLogo from '../components/ui/BrandLogo';
 
@@ -102,9 +102,9 @@ export default function LoginPage() {
                 <label htmlFor="password" className="block text-xs font-semibold text-navy-500 uppercase tracking-wider">
                   Password
                 </label>
-                <a href="#" className="text-xs text-pink-500 hover:text-pink-600 font-medium">
+                <Link to="/forgot-password" className="text-xs text-pink-500 hover:text-pink-600 font-medium">
                   Forgot password?
-                </a>
+                </Link>
               </div>
               <input
                 id="password"

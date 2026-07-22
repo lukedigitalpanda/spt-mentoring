@@ -4,6 +4,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from .models import User, MentoringMatch, MentorWaitingList
 from .serializers import (
     UserSerializer, UserListSerializer, UserCreateSerializer,
@@ -47,6 +49,26 @@ class UserViewSet(viewsets.ModelViewSet):
             serializer.save()
             return Response(serializer.data)
         return Response(UserSerializer(request.user, context={'request': request}).data)
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated], url_path='me/change-password')
+    def change_password(self, request):
+        """Let the authenticated user set a new password (new + confirm, no current-password check)."""
+        new_password = request.data.get('new_password', '')
+        confirm_password = request.data.get('confirm_password', '')
+
+        if not new_password:
+            return Response({'new_password': ['This field is required.']}, status=status.HTTP_400_BAD_REQUEST)
+        if new_password != confirm_password:
+            return Response({'confirm_password': ['Passwords do not match.']}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            validate_password(new_password, request.user)
+        except ValidationError as e:
+            return Response({'new_password': list(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+
+        request.user.set_password(new_password)
+        request.user.save(update_fields=['password'])
+        return Response({'detail': 'Password updated.'})
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated], url_path='me/data-export')
     def my_data_export(self, request):
@@ -150,6 +172,63 @@ class UserViewSet(viewsets.ModelViewSet):
             'last_message_received': last_received,
         })
 
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated], url_path='mentors')
+    def mentors(self, request):
+        """
+        Discoverable mentor list with avg_rating, discipline filter and availability.
+        Used by the Mentor Discovery page (/users/mentors/).
+
+        UAT P1-3a: this action must live on UserViewSet — it was previously
+        defined on MentoringMatchViewSet, which made /users/mentors/ a 404 and
+        the discovery page permanently empty.
+        """
+        from django.db.models import Avg, Count, Q
+        from apps.sessions.models import AvailabilitySlot
+
+        # H5: include users whose primary OR secondary role is mentor/alumni
+        qs = User.objects.filter(
+            Q(role__in=[User.Role.MENTOR, User.Role.ALUMNI])
+            | Q(secondary_roles__contains='mentor')
+            | Q(secondary_roles__contains='alumni'),
+            is_active=True,
+        ).distinct()
+
+        # Optional discipline filter — searches both legacy single field and new multi-value field
+        discipline = request.query_params.get('discipline')
+        if discipline:
+            qs = qs.filter(
+                Q(engineering_discipline__icontains=discipline) |
+                Q(engineering_disciplines__icontains=discipline)
+            )
+
+        # Annotate avg rating (from session feedback) and session count
+        qs = qs.annotate(
+            avg_rating=Avg('mentor_sessions__feedback__rating'),
+            session_count=Count('mentor_sessions', filter=Q(mentor_sessions__status='completed')),
+        )
+
+        # Optional availability filter
+        available_only = request.query_params.get('available') == '1'
+        if available_only:
+            booked_slots = AvailabilitySlot.objects.filter(
+                is_booked=False,
+                start_time__gt=timezone.now(),
+                mentor__in=qs,
+            ).values_list('mentor_id', flat=True).distinct()
+            qs = qs.filter(pk__in=booked_slots)
+
+        qs = qs.order_by('-avg_rating', 'last_name')
+
+        data = UserListSerializer(qs, many=True).data
+        # Merge annotations into the serialized output
+        ann_map = {u.pk: {'avg_rating': u.avg_rating, 'session_count': u.session_count} for u in qs}
+        for item in data:
+            extra = ann_map.get(item['id'], {})
+            item['avg_rating'] = round(extra.get('avg_rating') or 0, 1)
+            item['session_count'] = extra.get('session_count') or 0
+
+        return Response(data)
+
 
 class MentoringMatchViewSet(viewsets.ModelViewSet):
     """Manage mentor-scholar matches. Supports one mentor with multiple scholars."""
@@ -188,63 +267,19 @@ class MentoringMatchViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], permission_classes=[IsAdminUser])
     def mentors_with_capacity(self, request):
-        """Return mentors who can accept more scholars."""
+        """Return mentors who can accept more scholars.
+        Includes users whose primary OR secondary role is mentor/alumni (H5)."""
         from django.db.models import Count, Q
-        mentors = User.objects.filter(role=User.Role.MENTOR, is_active=True).annotate(
+        mentor_roles = [User.Role.MENTOR, User.Role.ALUMNI]
+        mentors = User.objects.filter(
+            Q(role__in=mentor_roles)
+            | Q(secondary_roles__contains='mentor')
+            | Q(secondary_roles__contains='alumni'),
+            is_active=True,
+        ).distinct().annotate(
             active_match_count=Count('mentor_matches', filter=Q(mentor_matches__is_active=True))
         ).filter(active_match_count__lt=3)  # default max
         return Response(UserListSerializer(mentors, many=True).data)
-
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
-    def me(self, request):
-        """Return the authenticated user's own profile."""
-        serializer = UserSerializer(request.user)
-        return Response(serializer.data)
-
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated], url_path='mentors')
-    def mentors(self, request):
-        """
-        Discoverable mentor list with avg_rating, discipline filter and availability.
-        Used by the Mentor Discovery page.
-        """
-        from django.db.models import Avg, Count, Q
-        from apps.sessions.models import AvailabilitySlot
-
-        qs = User.objects.filter(role=User.Role.MENTOR, is_active=True)
-
-        # Optional discipline filter
-        discipline = request.query_params.get('discipline')
-        if discipline:
-            qs = qs.filter(engineering_discipline__icontains=discipline)
-
-        # Annotate avg rating (from session feedback) and session count
-        qs = qs.annotate(
-            avg_rating=Avg('mentor_sessions__feedback__rating'),
-            session_count=Count('mentor_sessions', filter=Q(mentor_sessions__status='completed')),
-        )
-
-        # Optional availability filter
-        available_only = request.query_params.get('available') == '1'
-        if available_only:
-            booked_slots = AvailabilitySlot.objects.filter(
-                is_booked=False,
-                start_time__gt=timezone.now(),
-                mentor__in=qs,
-            ).values_list('mentor_id', flat=True).distinct()
-            qs = qs.filter(pk__in=booked_slots)
-
-        qs = qs.order_by('-avg_rating', 'last_name')
-
-        data = UserListSerializer(qs, many=True).data
-        # Merge annotations into the serialized output
-        ann_map = {u.pk: {'avg_rating': u.avg_rating, 'session_count': u.session_count} for u in qs}
-        for item in data:
-            extra = ann_map.get(item['id'], {})
-            item['avg_rating'] = round(extra.get('avg_rating') or 0, 1)
-            item['session_count'] = extra.get('session_count') or 0
-
-        return Response(data)
-
 
 class MentorWaitingListViewSet(viewsets.ModelViewSet):
     """Scholar waiting list for mentor assignment."""
@@ -265,7 +300,21 @@ class MentorWaitingListViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
-        serializer.save(scholar=self.request.user)
+        from rest_framework.exceptions import ValidationError
+        user = self.request.user
+        if not any(r in user.all_roles for r in ('scholar', 'alumni')):
+            raise ValidationError({'detail': 'Only scholars can join the mentor waiting list.'})
+        # Idempotent join: re-posting while already waiting returns the existing
+        # entry instead of creating a duplicate.
+        existing = MentorWaitingList.objects.filter(
+            scholar=user,
+            is_matched=False,
+            preferred_mentor=serializer.validated_data.get('preferred_mentor'),
+        ).first()
+        if existing:
+            serializer.instance = existing
+            return
+        serializer.save(scholar=user)
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
     def match(self, request, pk=None):

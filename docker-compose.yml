@@ -3,14 +3,15 @@ version: '3.9'
 services:
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: spt_mentoring
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: sKYanUa5dJw6FJLPJYK0Nbvhi2pwGQF8MmfMKdVk
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -19,8 +20,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -31,6 +31,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    restart: unless-stopped
     entrypoint: ["/bin/sh", "/app/entrypoint.sh"]
     command: daphne -b 0.0.0.0 -p 8000 config.asgi:application
     ports:
@@ -54,6 +55,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    restart: unless-stopped
     command: celery -A config worker -l info
     volumes:
       - ./backend:/app
@@ -71,6 +73,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    restart: unless-stopped
     command: celery -A config beat -l info
     volumes:
       - ./backend:/app
@@ -88,6 +91,11 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # Baked into the JS bundle at build time — browser push (P3-5).
+        # Sourced from .env; must match the backend's VAPID_PUBLIC_KEY.
+        - VITE_VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+    restart: unless-stopped
     ports:
       - "3001:3000"
     volumes:
@@ -96,28 +104,6 @@ services:
     environment:
       - VITE_API_URL=/api
 
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./certbot/conf:/etc/letsencrypt:ro
-      - ./certbot/www:/var/www/certbot:ro
-    command: >
-      /bin/sh -c "while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g 'daemon off;'"
-    depends_on:
-      - backend
-      - frontend
-
-  certbot:
-    image: certbot/certbot
-    volumes:
-      - ./certbot/conf:/etc/letsencrypt
-      - ./certbot/www:/var/www/certbot
-    entrypoint: >
-      /bin/sh -c "trap exit TERM; while :; do certbot renew --quiet; sleep 12h & wait $${!}; done"
 
 volumes:
   postgres_data:

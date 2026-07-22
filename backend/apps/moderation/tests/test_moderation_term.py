@@ -252,41 +252,49 @@ class ServiceScreenTests(TestCase):
 
     # --- EMAIL_PATTERN ---
 
-    def test_email_pattern_hotmail(self):
-        """john.smith@hotmail.com triggers *@hotmail.com pattern."""
+    def test_email_pattern_held_not_blocked(self):
+        """MSG-04: an email address is a contact detail — HELD for review, not blocked."""
         make_term(term='*@hotmail.com', match_type=ModerationTerm.MatchType.EMAIL_PATTERN,
                   severity=ModerationTerm.Severity.HIGH)
         ModerationService.invalidate_cache()
 
         result, _ = self._screen('contact me at john.smith@hotmail.com please')
-        self.assertEqual(result.status, 'blocked')
+        self.assertEqual(result.status, 'flagged')
 
-    def test_email_pattern_does_not_match_other_domain(self):
-        """*@hotmail.com does NOT match a gmail address."""
+    def test_any_email_is_held_for_review(self):
+        """Contact-detail detection holds ANY email, not only specific domains (MSG-04)."""
         make_term(term='*@hotmail.com', match_type=ModerationTerm.MatchType.EMAIL_PATTERN,
                   severity=ModerationTerm.Severity.HIGH)
         ModerationService.invalidate_cache()
 
         result, _ = self._screen('My colleague is user@gmail.com')
-        self.assertEqual(result.status, 'delivered')
+        self.assertEqual(result.status, 'flagged')
 
-    def test_email_pattern_bare_at_catches_any_email(self):
+    def test_bare_at_is_held_not_blocked(self):
+        """MSG-04: a bare '@' is a flagged contact detail, held for review — never blocked."""
         make_term(term='@', match_type=ModerationTerm.MatchType.EMAIL_PATTERN,
                   severity=ModerationTerm.Severity.HIGH)
         ModerationService.invalidate_cache()
 
         result, _ = self._screen('reach me at secret@example.org')
-        self.assertEqual(result.status, 'blocked')
+        self.assertEqual(result.status, 'flagged')
+
+    def test_clean_message_with_no_contact_delivers(self):
+        """A clean message with no terms or contact details delivers instantly (MSG-01/02/03)."""
+        ModerationService.invalidate_cache()
+        result, _ = self._screen('Looking forward to our session next week.')
+        self.assertEqual(result.status, 'delivered')
 
     # --- URL_FRAGMENT ---
 
-    def test_url_fragment_www(self):
+    def test_url_fragment_held_not_blocked(self):
+        """Shared links are contact-leak signals — HELD for review, not auto-blocked."""
         make_term(term='www', match_type=ModerationTerm.MatchType.URL_FRAGMENT,
                   severity=ModerationTerm.Severity.HIGH)
         ModerationService.invalidate_cache()
 
         result, _ = self._screen('visit www.example.com for details')
-        self.assertEqual(result.status, 'blocked')
+        self.assertEqual(result.status, 'flagged')
 
     # --- Severity outcomes ---
 

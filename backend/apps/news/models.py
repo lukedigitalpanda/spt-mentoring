@@ -24,7 +24,17 @@ class NewsItem(models.Model):
     body = models.TextField()
     cover_image = models.ImageField(upload_to='news/', blank=True, null=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
-    audience = models.CharField(max_length=20, choices=Audience.choices, default=Audience.ALL)
+    audience = models.CharField(
+        max_length=20, choices=Audience.choices, default=Audience.ALL,
+        help_text='Legacy single-audience field. Use audience_list for multi-audience targeting.',
+    )
+    audience_list = models.JSONField(
+        default=list, blank=True,
+        help_text=(
+            'Select one or more audiences. When set, overrides the legacy audience field. '
+            'E.g. ["scholar", "mentor"] targets scholars and mentors without including sponsors.'
+        ),
+    )
     is_featured = models.BooleanField(default=False, help_text='Show on home page as featured item')
     programme = models.ForeignKey(
         'cohorts.Programme', on_delete=models.SET_NULL, null=True, blank=True,

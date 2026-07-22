@@ -230,6 +230,29 @@ function PostList({
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [body, setBody] = useState('');
+  const [postNotice, setPostNotice] = useState<{ type: 'flagged' | 'blocked'; text: string } | null>(null);
+  const [reportingPostId, setReportingPostId] = useState<number | null>(null);
+  const [reportingAuthorId, setReportingAuthorId] = useState<number | null>(null);
+  const [reportingPostBody, setReportingPostBody] = useState('');
+  const [reportedPostId, setReportedPostId] = useState<number | null>(null);
+  const [reportDesc, setReportDesc] = useState('');
+
+  const reportAbuse = useMutation({
+    mutationFn: ({ authorId, desc, postId, postBody }: { authorId: number; desc: string; postId: number; postBody: string }) =>
+      api.post('/messaging/abuse-reports/', {
+        reported_user: authorId,
+        description: desc || `Reported forum post #${postId}`,
+        // Snapshot of the post content so admins can see what was reported
+        reported_content: postBody,
+      }),
+    onSuccess: (_, { postId }) => {
+      setReportingPostId(null);
+      setReportingAuthorId(null);
+      setReportDesc('');
+      setReportedPostId(postId);
+      setTimeout(() => setReportedPostId(null), 4000);
+    },
+  });
 
   const { data, isLoading } = useQuery<PaginatedResponse<Post>>({
     queryKey: ['posts', thread.id],
@@ -239,15 +262,40 @@ function PostList({
   const createPost = useMutation({
     mutationFn: (payload: { thread: number; body: string }) =>
       api.post('/forums/posts/', payload),
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['posts', thread.id] });
       setBody('');
+      // 202 Accepted means the post is held for moderation review — tell the user.
+      const moderationStatus = (res?.data as { moderation_status?: string })?.moderation_status;
+      if (moderationStatus === 'pending_review') {
+        setPostNotice({
+          type: 'flagged',
+          text: 'Your post has been submitted and is awaiting review before it becomes visible.',
+        });
+      } else {
+        setPostNotice(null);
+      }
+    },
+    onError: (error: unknown) => {
+      const axiosError = error as { response?: { status?: number; data?: { moderation_status?: string; detail?: string } } };
+      const httpStatus = axiosError?.response?.status;
+      const moderationStatus = axiosError?.response?.data?.moderation_status;
+
+      if (httpStatus === 400 && moderationStatus === 'blocked') {
+        setPostNotice({
+          type: 'blocked',
+          text: 'Your post could not be submitted as it contains restricted content.',
+        });
+      } else {
+        setPostNotice(null);
+      }
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!body.trim()) return;
+    setPostNotice(null);
     createPost.mutate({ thread: thread.id, body: body.trim() });
   };
 
@@ -276,7 +324,7 @@ function PostList({
             <EmptyState message="No posts yet." />
           ) : (
             data.results.map(post => (
-              <div key={post.id} className="bg-white rounded-2xl shadow-card p-5">
+              <div key={post.id} className="bg-white rounded-2xl shadow-card p-5 group">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <div className="w-7 h-7 rounded-full bg-gradient-brand-soft flex items-center justify-center text-white text-xs font-bold shadow-brand">
@@ -289,6 +337,27 @@ function PostList({
                       {post.status}
                     </span>
                     <span className="text-xs text-navy-500/30">{fmt(post.created_at)}</span>
+                    {user && post.author !== user.id && (
+                      reportedPostId === post.id ? (
+                        <span className="text-[10px] text-green-600 font-semibold flex items-center gap-1">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                          </svg>
+                          Reported
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => { setReportingPostId(post.id); setReportingAuthorId(post.author); setReportingPostBody(post.body); }}
+                          title="Report this post"
+                          className="flex items-center gap-1 text-[10px] text-red-400 hover:text-red-600 font-semibold transition-all px-1.5 py-0.5 rounded hover:bg-red-50 border border-red-100"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                          </svg>
+                          Report Abuse
+                        </button>
+                      )
+                    )}
                   </div>
                 </div>
                 <p className="text-sm text-navy-500/80 whitespace-pre-wrap">{post.body}</p>
@@ -309,7 +378,19 @@ function PostList({
             onChange={e => setBody(e.target.value)}
             required
           />
-          {createPost.isError && (
+          {postNotice && (
+            <div className={`px-3 py-2 rounded-lg text-xs font-medium flex items-start gap-2 ${
+              postNotice.type === 'blocked'
+                ? 'bg-red-50 border border-red-100 text-red-600'
+                : 'bg-yellow-50 border border-yellow-100 text-yellow-700'
+            }`}>
+              <svg className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+              {postNotice.text}
+            </div>
+          )}
+          {createPost.isError && !postNotice && (
             <p className="text-xs text-red-500">Failed to post. Please try again.</p>
           )}
           <div className="flex justify-end">
@@ -325,6 +406,38 @@ function PostList({
             All posts are reviewed for safeguarding compliance before becoming visible.
           </p>
         </form>
+      )}
+
+      {/* Report post modal */}
+      {reportingPostId !== null && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-80 mx-4">
+            <h3 className="font-bold text-navy-500 mb-1">Report this post?</h3>
+            <p className="text-xs text-navy-500/50 mb-4">This will be reviewed by our safeguarding team immediately.</p>
+            <textarea
+              className="w-full border border-purple-100 rounded-xl px-3 py-2 text-sm text-navy-500 resize-none focus:outline-none focus:ring-2 focus:ring-pink-500/30 mb-3"
+              rows={3}
+              placeholder="Briefly describe your concern…"
+              value={reportDesc}
+              onChange={e => setReportDesc(e.target.value)}
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => reportAbuse.mutate({ postId: reportingPostId, authorId: reportingAuthorId!, desc: reportDesc, postBody: reportingPostBody })}
+                disabled={reportAbuse.isPending}
+                className="flex-1 bg-pink-500 text-white text-sm font-semibold py-2 rounded-xl hover:bg-pink-600 disabled:opacity-50 transition-colors"
+              >
+                {reportAbuse.isPending ? 'Submitting…' : 'Submit Report'}
+              </button>
+              <button
+                onClick={() => { setReportingPostId(null); setReportingAuthorId(null); setReportDesc(''); }}
+                className="flex-1 border border-purple-100 text-navy-500/60 text-sm font-medium py-2 rounded-xl hover:bg-purple-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

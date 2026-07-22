@@ -1,0 +1,269 @@
+/*
+ * SPT Mentoring — Jazzmin colour overrides
+ * Paints AdminLTE 3 / Bootstrap 4 with SPT brand tokens.
+ *
+ * Tokens:
+ *   navy   #1d1464
+ *   purple #4527a0
+ *   pink   #e01e8c
+ *   orange #f5821e
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ── Typography ─────────────────────────────────────────────────────────── */
+body,
+.nav-sidebar .nav-link,
+.brand-text,
+.content-header h1 {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+
+/* ── Top navbar (navy) ──────────────────────────────────────────────────── */
+.main-header.navbar {
+  background-color: #1d1464 !important;
+  border-bottom: 2px solid #4527a0 !important;
+}
+.main-header .navbar-nav .nav-link,
+.main-header .navbar-nav .nav-link:hover,
+.main-header .nav-item .nav-link {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+.main-header .navbar-nav .nav-link:hover {
+  color: #e01e8c !important;
+}
+
+/* ── Sidebar (navy → purple gradient) ──────────────────────────────────── */
+.main-sidebar,
+.main-sidebar::before {
+  background: linear-gradient(180deg, #1d1464 0%, #2d1e8a 100%) !important;
+}
+.brand-link {
+  background: #1d1464 !important;
+  border-bottom: 1px solid rgba(255,255,255,0.12) !important;
+}
+.brand-link:hover {
+  background: #4527a0 !important;
+}
+.brand-text {
+  color: #fff !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em;
+}
+
+/* Sidebar nav items */
+.nav-sidebar .nav-item > .nav-link {
+  color: rgba(255, 255, 255, 0.75) !important;
+  border-radius: 8px !important;
+  margin: 1px 6px !important;
+  transition: background 0.15s, color 0.15s;
+}
+.nav-sidebar .nav-item > .nav-link:hover {
+  background: rgba(255, 255, 255, 0.10) !important;
+  color: #fff !important;
+}
+.nav-sidebar .nav-item > .nav-link.active,
+.nav-sidebar .nav-item.menu-open > .nav-link {
+  background: #4527a0 !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+.nav-sidebar .nav-treeview .nav-link {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+.nav-sidebar .nav-treeview .nav-link:hover,
+.nav-sidebar .nav-treeview .nav-link.active {
+  background: rgba(229, 30, 140, 0.18) !important;
+  color: #f9c5e2 !important;
+}
+
+/* Sidebar header labels */
+.nav-header {
+  color: rgba(255, 255, 255, 0.45) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+  padding: 10px 14px 4px !important;
+}
+
+/* Sidebar search box */
+.sidebar-form .input-group .form-control {
+  background: rgba(255,255,255,0.10) !important;
+  border-color: rgba(255,255,255,0.15) !important;
+  color: #fff !important;
+}
+.sidebar-form .input-group .form-control::placeholder { color: rgba(255,255,255,0.45) !important; }
+
+/* ── Brand / logo area ──────────────────────────────────────────────────── */
+.brand-link .brand-image { max-height: 32px; margin-top: 0; }
+
+/* ── Content area ───────────────────────────────────────────────────────── */
+.content-wrapper { background: #f8f7fc !important; }
+.card { border-radius: 12px !important; border: 1px solid #e8e4f5 !important; }
+.card-header {
+  background: linear-gradient(90deg, #4527a0 0%, #6a3fc8 100%) !important;
+  color: #fff !important;
+  border-radius: 11px 11px 0 0 !important;
+  font-weight: 600;
+}
+.card-header a { color: rgba(255,255,255,0.85) !important; }
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+.btn-primary,
+input[type="submit"],
+.submit-row input[type="submit"] {
+  background-color: #4527a0 !important;
+  border-color: #4527a0 !important;
+  color: #fff !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+}
+.btn-primary:hover,
+input[type="submit"]:hover {
+  background-color: #e01e8c !important;
+  border-color: #e01e8c !important;
+}
+.btn-secondary {
+  border-radius: 8px !important;
+}
+.btn-danger {
+  border-radius: 8px !important;
+}
+
+/* ── Links ──────────────────────────────────────────────────────────────── */
+a:not(.btn):not(.nav-link):not(.brand-link) { color: #4527a0; }
+a:not(.btn):not(.nav-link):not(.brand-link):hover { color: #e01e8c; }
+
+/* ── Breadcrumbs ────────────────────────────────────────────────────────── */
+.content-header .breadcrumb { background: transparent !important; }
+.content-header .breadcrumb-item a { color: #4527a0; }
+.content-header .breadcrumb-item.active { color: #6b6b8a; }
+
+/* ── Data tables / changelists ──────────────────────────────────────────── */
+.table thead th {
+  background: #f0edf8 !important;
+  color: #1d1464 !important;
+  font-weight: 700 !important;
+  border-bottom: 2px solid #cdc6e8 !important;
+}
+.table tbody tr:hover td { background: #fdf0f8 !important; }
+#result_list tbody tr:hover { background: #fdf0f8; }
+
+/* Selected row checkbox */
+#result_list tbody tr.selected { background: #ede9f8 !important; }
+
+/* ── Changelist filters ─────────────────────────────────────────────────── */
+#changelist-filter h2 {
+  background: #4527a0 !important;
+  color: #fff !important;
+}
+#changelist-filter h3 { color: #4527a0 !important; }
+#changelist-filter li.selected a { color: #e01e8c !important; font-weight: 700; }
+
+/* ── Form fields ────────────────────────────────────────────────────────── */
+.form-control:focus,
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #4527a0 !important;
+  box-shadow: 0 0 0 3px rgba(69, 39, 160, 0.12) !important;
+}
+
+/* ── Dashboard grid (from custom index.html) ────────────────────────────── */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  margin-top: 8px;
+}
+.app-card {
+  background: #fff;
+  border: 1px solid #e8e4f5;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 6px rgba(69,39,160,0.07);
+  transition: box-shadow 0.15s;
+}
+.app-card:hover { box-shadow: 0 4px 16px rgba(69,39,160,0.13); }
+.app-card-header {
+  background: linear-gradient(90deg,#4527a0 0%,#6a3fc8 100%);
+  padding: 10px 16px;
+}
+.app-card-title {
+  color: #fff !important;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.app-card-body { padding: 8px 0; }
+.model-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 16px;
+  border-bottom: 1px solid #f3f0fb;
+}
+.model-row:last-child { border-bottom: none; }
+.model-name a { color: #4527a0; font-weight: 500; }
+.model-actions { display: flex; gap: 6px; }
+.model-action-btn {
+  font-size: 11px;
+  padding: 2px 10px;
+  border-radius: 6px;
+  border: 1px solid;
+  text-decoration: none !important;
+  font-weight: 600;
+  transition: all 0.12s;
+}
+.view-btn { color: #4527a0 !important; border-color: #cdc6e8 !important; }
+.view-btn:hover { background: #4527a0 !important; color: #fff !important; border-color: #4527a0 !important; }
+.add-btn { color: #e01e8c !important; border-color: #f0b8d8 !important; }
+.add-btn:hover { background: #e01e8c !important; color: #fff !important; border-color: #e01e8c !important; }
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+.main-footer {
+  background: #fff !important;
+  border-top: 1px solid #e8e4f5 !important;
+  color: #6b6b8a !important;
+  font-size: 12px !important;
+}
+.main-footer a { color: #4527a0; }
+
+/* ── Form layout fixes (carried over from form_fix.css logic) ───────────── */
+.aligned .form-row {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 12px !important;
+  overflow: visible !important;
+  flex-wrap: wrap !important;
+}
+.aligned label:not(.vCheckboxLabel) {
+  float: none !important;
+  width: 160px !important;
+  flex-shrink: 0 !important;
+  padding-top: 10px !important;
+  box-sizing: border-box !important;
+}
+.aligned .form-row > div,
+.aligned .form-row .related-widget-wrapper,
+.aligned .form-row p.readonly {
+  flex: 1 1 auto !important;
+  min-width: 200px !important;
+}
+.aligned .form-row select,
+.aligned .form-row .vSelect {
+  width: 100% !important;
+  max-width: 500px !important;
+  height: auto !important;
+  box-sizing: border-box !important;
+}
+.submit-row {
+  overflow: visible !important;
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 10px !important;
+}
+.inline-group .tabular { overflow-x: auto !important; display: block !important; }
+.module, .inline-group { overflow: visible !important; }

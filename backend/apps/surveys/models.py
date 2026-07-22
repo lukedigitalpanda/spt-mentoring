@@ -22,7 +22,13 @@ class Survey(models.Model):
     )
     cohort = models.ForeignKey(
         'cohorts.Cohort', on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='surveys'
+        related_name='surveys_legacy',
+        help_text='Deprecated — use cohorts (M2M) instead',
+    )
+    cohorts = models.ManyToManyField(
+        'cohorts.Cohort', blank=True,
+        related_name='surveys',
+        help_text='Target one or more cohorts for this survey',
     )
     target_roles = models.JSONField(default=list, blank=True)
     opens_at = models.DateTimeField(null=True, blank=True)

@@ -38,9 +38,18 @@ class ResourceViewSet(viewsets.ModelViewSet):
         qs = Resource.objects.filter(is_active=True)
         if not (user.is_staff or user.role == 'admin'):
             from django.db.models import Q
-            qs = qs.filter(Q(audience='all') | Q(audience=user.role))
+            all_roles = user.all_roles
+            # Build audience filter across all roles the user holds
+            role_q = Q(audience_list=[], audience='all') | Q(audience_list__contains=['all'])
+            for r in all_roles:
+                role_q |= Q(audience_list=[], audience=r)
+                role_q |= Q(audience_list__contains=[r])
+            qs = qs.filter(role_q)
         if self.request.query_params.get('no_category') == 'true':
             qs = qs.filter(category__isnull=True)
+        created_after = self.request.query_params.get('created_after')
+        if created_after:
+            qs = qs.filter(created_at__date__gte=created_after)
         return qs
 
     def get_permissions(self):
@@ -65,9 +74,24 @@ class SharedDocumentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         from django.db.models import Q
+        # Staff get an unfiltered view so shared documents are always auditable.
+        if user.is_staff or user.role == 'admin':
+            return SharedDocument.objects.all()
         return SharedDocument.objects.filter(
             Q(shared_by=user) | Q(shared_with=user)
         )
 
     def perform_create(self, serializer):
-        serializer.save(shared_by=self.request.user)
+        """Allow specifying recipient by email (shared_with_email) or by user ID (shared_with)."""
+        from apps.users.models import User
+        from rest_framework.exceptions import ValidationError
+        recipient = serializer.validated_data.get('shared_with')
+        if recipient is None:
+            email = (self.request.data.get('shared_with_email') or '').strip()
+            if not email:
+                raise ValidationError({'shared_with': 'A recipient is required (shared_with or shared_with_email).'})
+            try:
+                recipient = User.objects.get(email=email, is_active=True)
+            except User.DoesNotExist:
+                raise ValidationError({'shared_with_email': 'No active user found with this email address.'})
+        serializer.save(shared_by=self.request.user, shared_with=recipient)

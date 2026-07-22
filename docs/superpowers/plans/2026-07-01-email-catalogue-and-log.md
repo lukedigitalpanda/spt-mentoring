@@ -326,7 +326,7 @@ EMAIL_CATALOGUE = [
         trigger='A message or forum post is flagged for review',
         recipients='All active staff/admin users',
         subject='[SPT Moderation] Flagged message requires review (#{id})',
-        body='A message has been flagged for review.\n\nSender:       {name} ({email})\nTriggered by: "{term}"\nReview it here: {admin url}',
+        body='A message has been flagged for review.\n\nSender:       {name} ({email})\nTriggered by: "{term}"\nPreview:      {first 200 chars of message}\nReview it here: {admin url}',
         source='apps/moderation/service.py:_alert_staff',
     ),
     EmailSpec(

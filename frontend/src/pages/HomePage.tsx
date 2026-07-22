@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import api from '../utils/api';
 import { useAuth } from '../hooks/useAuth';
-import type { NewsItem, PaginatedResponse, Conversation } from '../types';
+import type { NewsItem, PromotionalBanner, PaginatedResponse, Conversation, Resource, ActiveMatch, MatchedMentor } from '../types';
 
 // ── Decorative brand star (matches logo style) ──────────────────────────────
 function BrandStar({ size = 20 }: { size?: number }) {
@@ -100,6 +100,89 @@ function FeaturedNewsBanner({ item }: { item: NewsItem }) {
   );
 }
 
+// ── Promotional banner ────────────────────────────────────────────────────────
+function PromoBanner({ banner }: { banner: PromotionalBanner }) {
+  const content = (
+    <div className="relative rounded-2xl overflow-hidden shadow-card mb-6 group">
+      <img src={banner.image} alt={banner.title} className="w-full h-40 object-cover" />
+      <div className="absolute inset-0 bg-gradient-to-r from-black/60 to-transparent flex items-end p-5">
+        <div className="text-white">
+          <h3 className="font-extrabold text-lg leading-tight group-hover:text-pink-200 transition-colors">
+            {banner.title}
+          </h3>
+          {banner.subtitle && <p className="text-sm text-white/70 mt-0.5">{banner.subtitle}</p>}
+          {banner.link_text && (
+            <span className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold bg-pink-500 text-white px-3 py-1.5 rounded-lg group-hover:bg-pink-600 transition-colors">
+              {banner.link_text}
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+              </svg>
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+  return banner.link_url ? (
+    <a href={banner.link_url} target="_blank" rel="noopener noreferrer">{content}</a>
+  ) : <>{content}</>;
+}
+
+// ── Match card ────────────────────────────────────────────────────────────────
+function ScholarMatchCard({ mentor }: { mentor: MatchedMentor }) {
+  const fmt = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return (
+    <div className="bg-white rounded-2xl shadow-card p-5 flex items-center gap-4">
+      <div className="w-10 h-10 rounded-xl bg-gradient-brand-soft flex items-center justify-center flex-shrink-0 shadow-brand">
+        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </svg>
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[10px] font-semibold text-navy-500/40 uppercase tracking-wider">Your Mentor</p>
+        <p className="font-bold text-sm text-navy-500 truncate">{mentor.mentor_name}</p>
+        <p className="text-[11px] text-navy-500/40">Matched {fmt(mentor.matched_on)}</p>
+      </div>
+      <Link to="/messages" className="flex-shrink-0 text-xs font-semibold text-pink-500 hover:text-pink-600 transition-colors">
+        Message →
+      </Link>
+    </div>
+  );
+}
+
+function MentorMatchCard({ matches }: { matches: ActiveMatch[] }) {
+  const active = matches.filter(m => m.is_active);
+  if (!active.length) return null;
+  const fmt = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return (
+    <div className="bg-white rounded-2xl shadow-card p-5">
+      <p className="text-[10px] font-semibold text-navy-500/40 uppercase tracking-wider mb-3">
+        Your Scholar{active.length > 1 ? 's' : ''}
+      </p>
+      <div className="space-y-3">
+        {active.map(m => (
+          <div key={m.scholar_id} className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-sm text-navy-500 truncate">{m.scholar_name}</p>
+              <p className="text-[11px] text-navy-500/40">
+                Matched {fmt(m.matched_on)}{m.programme_name ? ` · ${m.programme_name}` : ''}
+              </p>
+            </div>
+            <Link to="/messages" className="flex-shrink-0 text-xs font-semibold text-pink-500 hover:text-pink-600 transition-colors">
+              Message →
+            </Link>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function HomePage() {
   const { user } = useAuth();
@@ -107,6 +190,11 @@ export default function HomePage() {
   const { data: news } = useQuery<PaginatedResponse<NewsItem>>({
     queryKey: ['news', 'featured'],
     queryFn: () => api.get('/news/items/?is_featured=true&status=published').then(r => r.data),
+  });
+
+  const { data: banners } = useQuery<PromotionalBanner[]>({
+    queryKey: ['banners'],
+    queryFn: () => api.get('/news/banners/').then(r => Array.isArray(r.data) ? r.data : r.data.results ?? []),
   });
 
   const { data: activity } = useQuery({
@@ -124,6 +212,16 @@ export default function HomePage() {
 
   const unreadMessages = conversations?.results?.reduce((sum, c) => sum + (c.unread_count ?? 0), 0) ?? 0;
 
+  // New resources: count resources added in the last 14 days visible to this user
+  const since14Days = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const { data: newResourcesData } = useQuery<PaginatedResponse<Resource>>({
+    queryKey: ['resources', 'new', user?.role],
+    queryFn: () => api.get(`/resources/?is_active=true&created_after=${since14Days}`).then(r => r.data),
+    enabled: !!user,
+    refetchInterval: 60_000,
+  });
+  const newResourceCount = newResourcesData?.count ?? 0;
+
   const featured = news?.results?.[0];
   const fmt = (d?: string | null) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—';
 
@@ -131,6 +229,9 @@ export default function HomePage() {
     <div className="space-y-8">
       {/* Hero */}
       <Hero name={user?.first_name ?? ''} role={user?.role ?? ''} />
+
+      {/* Promotional banners */}
+      {banners && banners.length > 0 && banners.map(b => <PromoBanner key={b.id} banner={b} />)}
 
       {/* Featured news */}
       {featured && <FeaturedNewsBanner item={featured} />}
@@ -140,8 +241,16 @@ export default function HomePage() {
         <StatCard label="Last message sent"     value={fmt(activity?.last_message_sent)}     sub="by you"          accent />
         <StatCard label="Last message received" value={fmt(activity?.last_message_received)} sub="from your network" />
         <StatCard label="Unread messages"       value={unreadMessages} sub={unreadMessages === 1 ? '1 unread message' : `${unreadMessages} unread messages`} />
-        <StatCard label="New resources"         value="—" sub="Check resources" />
+        <StatCard label="New resources"         value={newResourceCount} sub={newResourceCount === 1 ? 'Added in last 14 days' : 'Added in last 14 days'} />
       </div>
+
+      {/* Active match */}
+      {user?.scholar_profile?.matched_mentor && (
+        <ScholarMatchCard mentor={user.scholar_profile.matched_mentor} />
+      )}
+      {user?.mentor_profile?.active_matches && user.mentor_profile.active_matches.some(m => m.is_active) && (
+        <MentorMatchCard matches={user.mentor_profile.active_matches} />
+      )}
 
       {/* Quick actions */}
       <div>

@@ -18,7 +18,9 @@ class NewsItemViewSet(viewsets.ModelViewSet):
         if not (user.is_staff or user.role == 'admin'):
             from django.db.models import Q
             qs = qs.filter(status='published').filter(
-                Q(audience='all') | Q(audience=user.role)
+                Q(audience_list=[], audience__in=['all', user.role]) |
+                Q(audience_list__contains=[user.role]) |
+                Q(audience_list__contains=['all'])
             )
         return qs.order_by('-published_at')
 

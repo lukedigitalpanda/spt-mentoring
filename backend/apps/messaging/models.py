@@ -17,6 +17,7 @@ class Conversation(models.Model):
         DIRECT = 'direct', _('Direct Message')
         GROUP = 'group', _('Group Mentoring')
         SPONSOR_UPDATE = 'sponsor_update', _('Sponsor Update')
+        MASS_MESSAGE = 'mass_message', _('Mass Message')
 
     conversation_type = models.CharField(
         max_length=20, choices=ConversationType.choices, default=ConversationType.DIRECT
@@ -25,6 +26,20 @@ class Conversation(models.Model):
     subject = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     is_private = models.BooleanField(default=True)
+    replies_enabled = models.BooleanField(
+        default=True,
+        help_text='When False, participants cannot reply (used for broadcast-only messages)',
+    )
+
+    class SupportStatus(models.TextChoices):
+        OPEN = 'open', _('Open')
+        IN_PROGRESS = 'in_progress', _('In Progress')
+        RESOLVED = 'resolved', _('Resolved')
+
+    support_status = models.CharField(
+        max_length=20, choices=SupportStatus.choices, null=True, blank=True,
+        help_text='Workflow status for support conversations. Null for non-support threads.',
+    )
 
     # For group mentoring
     cohort = models.ForeignKey(
@@ -37,11 +52,41 @@ class Conversation(models.Model):
 
     @property
     def last_message(self):
-        return self.messages.filter(status=Message.Status.DELIVERED).order_by('-sent_at').first()
+        # TC-08: exclude messages from inactive users so deactivated accounts
+        # do not appear in the left-panel conversation preview.
+        return (
+            self.messages
+            .filter(status=Message.Status.DELIVERED, sender__is_active=True)
+            .order_by('-sent_at')
+            .first()
+        )
 
 
 class Message(models.Model):
-    """A single message within a conversation."""
+    """A single message within a conversation.
+
+    Message status state machine
+    ─────────────────────────────
+    Every message starts as PENDING immediately after creation and is
+    synchronously screened by ModerationService.screen() before the API
+    response is returned.  From there it can only move forward:
+
+        PENDING  ──► BLOCKED   (body matched a BlockedTerm — never delivered)
+                 ──► FLAGGED   (body matched a FlaggedTerm — held for admin review)
+                 ──► DELIVERED (passed all checks — visible to recipients)
+
+    Admin can later move:
+        FLAGGED  ──► DELIVERED  (approved via ModerationService.approve())
+                 ──► BLOCKED    (rejected via ModerationService.reject())
+
+    DELETED is a soft-delete applied manually by admins; it hides the message
+    from all participants without removing it from the database.
+
+    NOTE: Because screening is synchronous, a message should never remain in
+    PENDING state after the API response is returned.  If you observe PENDING
+    messages in production it indicates a screening error and should be
+    investigated.
+    """
     class Status(models.TextChoices):
         PENDING = 'pending', _('Pending Moderation')
         DELIVERED = 'delivered', _('Delivered')
@@ -85,9 +130,19 @@ class MessageRead(models.Model):
 
 
 class MassMessage(models.Model):
-    """Admin-sent broadcast message to a group of users."""
+    """Admin-sent broadcast message to a group of users.
+
+    When sent, one Conversation + Message is created per recipient via
+    send_mass_message_task().  If replies_enabled=False, each generated
+    Conversation will also have replies_enabled=False, and the reply UI
+    will be hidden in the front-end for those conversations.
+
+    Replies that ARE enabled go directly back to the sender (the admin
+    or Arkwright system account) as a standard direct message.
+    """
     class Status(models.TextChoices):
         DRAFT = 'draft', _('Draft')
+        SENDING = 'sending', _('Sending')
         SENT = 'sent', _('Sent')
 
     sender = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='mass_messages_sent')
@@ -100,6 +155,10 @@ class MassMessage(models.Model):
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.DRAFT)
     recipient_count = models.PositiveIntegerField(default=0)
     send_from_email = models.EmailField(default='mentoring@spt.org')
+    replies_enabled = models.BooleanField(
+        default=True,
+        help_text='Allow recipients to reply to this broadcast. When disabled, the reply UI is hidden.',
+    )
 
     def __str__(self):
         return f'Mass message: {self.subject}'
@@ -118,6 +177,11 @@ class AbuseReport(models.Model):
         related_name='abuse_reports_received'
     )
     message = models.ForeignKey(Message, on_delete=models.SET_NULL, null=True, blank=True)
+    reported_content = models.TextField(
+        blank=True,
+        help_text='Snapshot of the reported content (message or forum post body) '
+                  'taken when the report was filed, so it survives later edits/deletion.',
+    )
     description = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)

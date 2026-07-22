@@ -23,6 +23,10 @@ class User(AbstractUser):
         ADMIN = 'admin', _('Admin')
 
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.SCHOLAR)
+    secondary_roles = models.JSONField(
+        default=list, blank=True,
+        help_text='Additional roles this user holds (e.g. a Sponsor who is also a Mentor)',
+    )
     email = models.EmailField(unique=True)
 
     # Profile
@@ -34,6 +38,10 @@ class User(AbstractUser):
 
     # Engineering/matching
     engineering_discipline = models.CharField(max_length=100, blank=True)
+    engineering_disciplines = models.JSONField(
+        default=list, blank=True,
+        help_text='All engineering disciplines this user is associated with (up to 3 supported for CRM upload)',
+    )
     interests = models.JSONField(default=list, blank=True)
 
     # Contact preferences
@@ -64,6 +72,15 @@ class User(AbstractUser):
     def full_name(self):
         return f'{self.first_name} {self.last_name}'.strip() or self.email
 
+    @property
+    def all_roles(self) -> list:
+        """Primary role plus any secondary roles — use this for permission checks."""
+        roles = [self.role]
+        for r in (self.secondary_roles or []):
+            if r not in roles:
+                roles.append(r)
+        return roles
+
     def __str__(self):
         return f'{self.full_name} ({self.get_role_display()})'
 
@@ -78,8 +95,11 @@ class MentorProfile(models.Model):
     specialisms = models.JSONField(default=list, blank=True, help_text='List of engineering specialisms')
     availability = models.TextField(blank=True, help_text='General availability notes')
     linkedin_url = models.URLField(blank=True)
-    dbs_check_date = models.DateField(null=True, blank=True)
-    dbs_certificate_number = models.CharField(max_length=50, blank=True)
+    dbs_check_date = models.DateField(null=True, blank=True, help_text='DBS check completion date (England/Wales)')
+    pvg_check_date = models.DateField(
+        null=True, blank=True,
+        help_text='PVG scheme membership date — Scottish users only (no certificate number stored)',
+    )
 
     history = HistoricalRecords()
 
@@ -102,12 +122,22 @@ class ScholarProfile(models.Model):
     course = models.CharField(max_length=200, blank=True)
     year_of_study = models.PositiveIntegerField(null=True, blank=True)
     graduation_year = models.PositiveIntegerField(null=True, blank=True)
-    scholarship_reference = models.CharField(max_length=100, blank=True)
+    scholarship_reference = models.CharField(
+        max_length=100, blank=True,
+        help_text='SPT internal scholar ID / CRM reference number',
+    )
     sponsor = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='sponsored_scholars', limit_choices_to={'role': User.Role.SPONSOR}
+        related_name='sponsored_scholars',
+        limit_choices_to=models.Q(role=User.Role.SPONSOR) | models.Q(secondary_roles__contains='sponsor'),
     )
-    goals = models.TextField(blank=True, help_text='Scholar goals for the mentoring programme')
+    goals = models.TextField(
+        blank=True,
+        help_text=(
+            'What do you hope to achieve through the SPT mentoring programme? '
+            'Describe your learning objectives, career goals, or skills you want to develop.'
+        ),
+    )
     soft_skills_baseline = models.JSONField(default=dict, blank=True)
     soft_skills_current = models.JSONField(default=dict, blank=True)
 
@@ -140,7 +170,7 @@ class MentoringMatch(models.Model):
     )
     mentor = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name='mentor_matches',
-        limit_choices_to={'role': User.Role.MENTOR}
+        limit_choices_to={'role__in': [User.Role.MENTOR, User.Role.ALUMNI]}
     )
     matched_on = models.DateTimeField(auto_now_add=True)
     matched_by = models.ForeignKey(
@@ -154,6 +184,7 @@ class MentoringMatch(models.Model):
     class Meta:
         unique_together = ('scholar', 'mentor')
         verbose_name = 'Mentoring Match'
+        verbose_name_plural = 'Mentoring Matches'
 
     def __str__(self):
         return f'{self.scholar.full_name} ↔ {self.mentor.full_name}'
@@ -170,7 +201,7 @@ class MentorWaitingList(models.Model):
         User, on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name='waiting_scholars',
-        limit_choices_to={'role': 'mentor'},
+        limit_choices_to={'role__in': ['mentor', 'alumni']},
     )
     engineering_discipline = models.CharField(max_length=100, blank=True)
     notes = models.TextField(blank=True)

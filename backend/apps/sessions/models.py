@@ -7,6 +7,7 @@ Covers:
   - SessionFeedback   (post-session star rating + comments from both parties)
 """
 import hashlib
+from datetime import timedelta
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
 from django.utils import timezone
@@ -99,6 +100,25 @@ class MentoringSession(models.Model):
     @property
     def is_upcoming(self):
         return self.start_time > timezone.now() and self.status == self.Status.CONFIRMED
+
+    @property
+    def room_name(self):
+        """Stable room id shared by both participants (JaaS room or Jitsi path)."""
+        if self.meeting_url:
+            return self.meeting_url.rstrip('/').rsplit('/', 1)[-1]
+        token = hashlib.md5(
+            f"spt-{self.mentor_id}-{self.scholar_id}-{self.start_time}".encode()
+        ).hexdigest()[:10]
+        return f"SPTMentoring-{token}"
+
+    @property
+    def is_joinable(self):
+        """Confirmed and within the join window (5 min before start until end)."""
+        now = timezone.now()
+        return (
+            self.status == self.Status.CONFIRMED
+            and self.start_time - timedelta(minutes=5) <= now <= self.end_time
+        )
 
 
 class SessionFeedback(models.Model):

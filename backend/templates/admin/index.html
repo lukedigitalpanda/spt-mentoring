@@ -1,10 +1,12 @@
 {% extends "admin/base_site.html" %}
-{% load i18n static %}
+{% load i18n static admin_todo %}
 
 {% block title %}{% trans 'Site administration' %} | {{ site_title|default:_('Django site admin') }}{% endblock %}
 
 {% block content %}
 <div id="content-main">
+
+  {% admin_todo_panel %}
 
   {% if app_list %}
   <div class="dashboard-grid">
@@ -50,4 +52,3 @@
 </div>
 {% endblock %}
 
-{% block sidebar %}{% endblock %}

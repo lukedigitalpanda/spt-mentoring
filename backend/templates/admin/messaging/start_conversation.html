@@ -1,0 +1,60 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}Start a new message | SPT Mentoring Admin{% endblock %}
+
+{% block content_title %}<h1>Start a new message</h1>{% endblock %}
+
+{% block content %}
+<p style="color:#555;max-width:640px;margin-bottom:20px;">
+  Send a direct message to any scholar, mentor or sponsor. It is delivered as the
+  <strong>Arkwright support account</strong> and appears in the recipient’s Messages
+  inbox straight away — they do not need to have contacted you first. If you have
+  already messaged this person, your note is added to that existing thread.
+</p>
+
+<form method="post" style="
+  background:#fff;border-radius:14px;padding:24px 28px;
+  box-shadow:0 2px 8px rgba(69,39,160,0.08);border:1px solid #e8e4f5;
+  max-width:640px;
+">
+  {% csrf_token %}
+
+  {% if form.non_field_errors %}
+    <div style="color:#c62828;margin-bottom:16px;">{{ form.non_field_errors }}</div>
+  {% endif %}
+
+  {% for field in form %}
+    <div style="margin-bottom:18px;">
+      <label for="{{ field.id_for_label }}" style="
+        display:block;font-size:0.74rem;font-weight:700;color:#6b6b8a;
+        text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">
+        {{ field.label }}
+      </label>
+      {{ field }}
+      {% if field.help_text %}
+        <p style="color:#8a8aa0;font-size:0.78rem;margin-top:4px;">{{ field.help_text }}</p>
+      {% endif %}
+      {% if field.errors %}
+        <p style="color:#c62828;font-size:0.82rem;margin-top:4px;">{{ field.errors|striptags }}</p>
+      {% endif %}
+    </div>
+  {% endfor %}
+
+  <div style="margin-top:24px;">
+    <button type="submit" style="
+      background:#e01e8c;color:#fff;padding:9px 26px;border-radius:8px;
+      font-weight:700;border:none;cursor:pointer;font-size:0.9rem;">
+      ▶ Send message
+    </button>
+    <a href="../" style="margin-left:14px;color:#7c3aed;font-size:0.85rem;">Cancel</a>
+  </div>
+</form>
+
+<style>
+  #id_recipient, #id_subject, #id_body {
+    width:100%;box-sizing:border-box;border:1px solid #d8d3f0;border-radius:8px;
+    padding:9px 12px;font-size:0.9rem;
+  }
+</style>
+{% endblock %}

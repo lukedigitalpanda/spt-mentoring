@@ -21,6 +21,11 @@ db.sqlite3
 # Environment
 .env
 .env.local
+.env.bak*
+
+# Secrets / private keys (never commit)
+keys/
+*.pk
 
 # Node / React
 node_modules/
@@ -36,3 +41,9 @@ node_modules/
 # OS
 .DS_Store
 Thumbs.db
+
+# Runtime/data artefacts - never commit
+backups/
+backend/celerybeat-schedule
+.claude/worktrees/
+.superpowers/

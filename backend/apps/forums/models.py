@@ -7,8 +7,22 @@ Forums can be:
   - Private  – group mentoring, restricted to a cohort or specific members
 """
 from django.db import models
+from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 from simple_history.models import HistoricalRecords
+
+
+class ForumQuerySet(models.QuerySet):
+    def visible_to(self, user):
+        """Forums this user is allowed to see (single source of truth for
+        forum visibility scoping — used by the API and by N-2 notifications)."""
+        if getattr(user, 'is_staff', False) or getattr(user, 'role', None) == 'admin':
+            return self
+        return self.filter(
+            Q(visibility=Forum.Visibility.OPEN) |
+            Q(visibility=Forum.Visibility.PROGRAMME, programme__cohorts__memberships__user=user) |
+            Q(visibility=Forum.Visibility.PRIVATE, members=user)
+        ).distinct()
 
 
 class Forum(models.Model):
@@ -17,6 +31,8 @@ class Forum(models.Model):
         OPEN = 'open', _('Open to all')
         PROGRAMME = 'programme', _('Programme members only')
         PRIVATE = 'private', _('Private group')
+
+    objects = ForumQuerySet.as_manager()
 
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
@@ -57,11 +73,30 @@ class Thread(models.Model):
 
 
 class Post(models.Model):
-    """A post within a Thread."""
+    """A post within a Thread.
+
+    Post status state machine
+    ──────────────────────────
+    Forum posts share the same moderation pipeline as direct messages but use
+    slightly different status names to reflect their public/thread context:
+
+        PENDING  ──► HIDDEN    (body matched a BlockedTerm — never shown)
+                 ──► FLAGGED   (body matched a FlaggedTerm — held for admin review)
+                 ──► VISIBLE   (passed all checks — shown to all thread participants)
+
+    Admins can later update FLAGGED or HIDDEN posts back to VISIBLE, or
+    permanently set them to HIDDEN.
+
+    Analogy with Message statuses:
+        Post.VISIBLE  ≈ Message.DELIVERED
+        Post.HIDDEN   ≈ Message.BLOCKED
+        Post.FLAGGED  ≈ Message.FLAGGED
+        Post.PENDING  ≈ Message.PENDING  (transient — should not persist after screening)
+    """
     class Status(models.TextChoices):
         PENDING = 'pending', _('Pending Moderation')
         VISIBLE = 'visible', _('Visible')
-        FLAGGED = 'flagged', _('Flagged')
+        FLAGGED = 'flagged', _('Flagged for Review')
         HIDDEN = 'hidden', _('Hidden')
 
     thread = models.ForeignKey(Thread, on_delete=models.CASCADE, related_name='posts')
@@ -71,7 +106,15 @@ class Post(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     moderation_note = models.TextField(blank=True)
+    moderated_by = models.ForeignKey(
+        'users.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='moderated_posts',
+    )
+    moderated_at = models.DateTimeField(null=True, blank=True)
     attachment = models.FileField(upload_to='forum_attachments/', blank=True, null=True)
+    # Set once matched mentor(s) have been notified that this post became
+    # visible, so edits/re-approvals never re-notify (N-2).
+    mentor_notified = models.BooleanField(default=False)
 
     history = HistoricalRecords()
 

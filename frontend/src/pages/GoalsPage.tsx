@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../utils/api';
+import { useAuth } from '../hooks/useAuth';
 import type { Goal, GoalMilestone, PaginatedResponse } from '../types';
 
 function BrandStar({ size = 16 }: { size?: number }) {
@@ -27,6 +28,12 @@ const statusColour: Record<string, string> = {
   paused:    'bg-yellow-100 text-yellow-700',
 };
 
+const statusLabel: Record<string, string> = {
+  active:    'Active',
+  completed: 'Completed',
+  paused:    'Acknowledged',
+};
+
 const CATEGORIES = ['career', 'technical', 'personal', 'academic', 'networking', 'other'];
 
 function ProgressBar({ value }: { value: number }) {
@@ -41,14 +48,19 @@ function ProgressBar({ value }: { value: number }) {
 }
 
 // ── Milestone item ────────────────────────────────────────────────────────────
-function MilestoneItem({ milestone, onToggle, onDelete }: {
+function MilestoneItem({ milestone, onToggle, onDelete, readOnly = false }: {
   milestone: GoalMilestone;
   onToggle: () => void;
   onDelete: () => void;
+  readOnly?: boolean;
 }) {
   return (
     <div className="flex items-center gap-2.5 group py-1">
-      <button onClick={onToggle} className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all ${milestone.is_completed ? 'bg-pink-500 border-pink-500' : 'border-purple-200 hover:border-pink-500'}`}>
+      <button
+        onClick={readOnly ? undefined : onToggle}
+        disabled={readOnly}
+        className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all ${milestone.is_completed ? 'bg-pink-500 border-pink-500' : 'border-purple-200'} ${readOnly ? 'cursor-default' : 'hover:border-pink-500'}`}
+      >
         {milestone.is_completed && (
           <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -63,18 +75,21 @@ function MilestoneItem({ milestone, onToggle, onDelete }: {
           {new Date(milestone.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
         </span>
       )}
-      <button onClick={onDelete} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-all">
-        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
+      {!readOnly && (
+        <button onClick={onDelete} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-all">
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }
 
 // ── Goal card ─────────────────────────────────────────────────────────────────
-function GoalCard({ goal }: { goal: Goal }) {
+function GoalCard({ goal, currentUserId }: { goal: Goal; currentUserId?: number }) {
   const queryClient = useQueryClient();
+  const isOwn = !currentUserId || goal.user === currentUserId;
   const [expanded, setExpanded] = useState(false);
   const [newMilestone, setNewMilestone] = useState('');
   const [milestoneDue, setMilestoneDue] = useState('');
@@ -114,7 +129,12 @@ function GoalCard({ goal }: { goal: Goal }) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 mb-1 flex-wrap">
               <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize ${categoryColour[goal.category]}`}>{goal.category}</span>
-              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize ${statusColour[goal.status]}`}>{goal.status}</span>
+              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${statusColour[goal.status]}`}>{statusLabel[goal.status] ?? goal.status}</span>
+              {!isOwn && (
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700">
+                  Scholar: {goal.user_name}
+                </span>
+              )}
               {goal.due_date && (
                 <span className="text-[10px] text-navy-500/40">
                   Due {new Date(goal.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -124,20 +144,28 @@ function GoalCard({ goal }: { goal: Goal }) {
             <h3 className="font-bold text-sm text-navy-500">{goal.title}</h3>
             {goal.description && <p className="text-xs text-navy-500/50 mt-0.5 line-clamp-2">{goal.description}</p>}
           </div>
-          <div className="flex items-center gap-1 flex-shrink-0">
-            {goal.status !== 'completed' && (
-              <button onClick={() => updateGoal.mutate({ status: 'completed' })}
-                className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 transition-colors">
-                ✓ Done
+          {isOwn && (
+            <div className="flex items-center gap-1 flex-shrink-0">
+              {goal.status === 'active' && (
+                <button onClick={() => updateGoal.mutate({ status: 'paused' })}
+                  className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-yellow-50 text-yellow-700 hover:bg-yellow-100 transition-colors">
+                  ✓ Acknowledge
+                </button>
+              )}
+              {goal.status !== 'completed' && (
+                <button onClick={() => updateGoal.mutate({ status: 'completed' })}
+                  className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 transition-colors">
+                  ✓ Mark Complete
+                </button>
+              )}
+              <button onClick={() => deleteGoal.mutate()}
+                className="text-navy-500/40 hover:text-red-500 transition-colors p-1">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
               </button>
-            )}
-            <button onClick={() => deleteGoal.mutate()}
-              className="text-navy-500/40 hover:text-red-500 transition-colors p-1">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </button>
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Progress bar */}
@@ -164,27 +192,29 @@ function GoalCard({ goal }: { goal: Goal }) {
             {goal.milestones.map(m => (
               <MilestoneItem key={m.id} milestone={m}
                 onToggle={() => toggleMilestone.mutate(m)}
-                onDelete={() => deleteMilestone.mutate(m.id)} />
+                onDelete={() => deleteMilestone.mutate(m.id)}
+                readOnly={!isOwn} />
             ))}
           </div>
 
-          {/* Add milestone */}
-          <div className="flex gap-2 mt-3">
-            <input
-              placeholder="Add a milestone…"
-              value={newMilestone}
-              onChange={e => setNewMilestone(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && newMilestone.trim() && addMilestone.mutate()}
-              className="flex-1 border border-purple-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors"
-            />
-            <input type="date" value={milestoneDue} onChange={e => setMilestoneDue(e.target.value)}
-              className="border border-purple-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors w-32" />
-            <button onClick={() => newMilestone.trim() && addMilestone.mutate()}
-              disabled={!newMilestone.trim() || addMilestone.isPending}
-              className="text-xs font-semibold bg-pink-500 text-white px-3 py-1.5 rounded-lg hover:bg-pink-600 disabled:opacity-50 transition-colors">
-              +
-            </button>
-          </div>
+          {isOwn && (
+            <div className="flex gap-2 mt-3">
+              <input
+                placeholder="Add a milestone…"
+                value={newMilestone}
+                onChange={e => setNewMilestone(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && newMilestone.trim() && addMilestone.mutate()}
+                className="flex-1 border border-purple-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors"
+              />
+              <input type="date" value={milestoneDue} onChange={e => setMilestoneDue(e.target.value)}
+                className="border border-purple-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-colors w-32" />
+              <button onClick={() => newMilestone.trim() && addMilestone.mutate()}
+                disabled={!newMilestone.trim() || addMilestone.isPending}
+                className="text-xs font-semibold bg-pink-500 text-white px-3 py-1.5 rounded-lg hover:bg-pink-600 disabled:opacity-50 transition-colors">
+                +
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -232,8 +262,10 @@ function NewGoalForm({ onClose }: { onClose: () => void }) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function GoalsPage() {
+  const { user } = useAuth();
   const [showNew, setShowNew] = useState(false);
-  const [filterStatus, setFilterStatus] = useState('active');
+  // ISS-G: default to 'all' so Acknowledged (paused) goals are never hidden.
+  const [filterStatus, setFilterStatus] = useState('');
 
   const params = new URLSearchParams();
   if (filterStatus) params.set('status', filterStatus);
@@ -262,7 +294,7 @@ export default function GoalsPage() {
           </div>
           <div className="flex gap-4 text-center">
             <div><p className="text-2xl font-extrabold">{activeCount}</p><p className="text-xs text-white/60">Active</p></div>
-            <div><p className="text-2xl font-extrabold">{completedCount}</p><p className="text-xs text-white/60">Done</p></div>
+            <div><p className="text-2xl font-extrabold">{completedCount}</p><p className="text-xs text-white/60">Completed</p></div>
             <div><p className="text-2xl font-extrabold">{avgProgress}%</p><p className="text-xs text-white/60">Avg progress</p></div>
           </div>
         </div>
@@ -271,10 +303,15 @@ export default function GoalsPage() {
       {/* Controls */}
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div className="flex gap-1 bg-white rounded-xl shadow-card p-1">
-          {['active', 'paused', 'completed', ''].map(s => (
-            <button key={s} onClick={() => setFilterStatus(s)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${filterStatus === s ? 'bg-gradient-brand text-white' : 'text-navy-500/60 hover:text-navy-500'}`}>
-              {s || 'All'}
+          {[
+            { value: 'active', label: 'Active' },
+            { value: 'paused', label: 'Acknowledged' },
+            { value: 'completed', label: 'Completed' },
+            { value: '', label: 'All' },
+          ].map(({ value, label }) => (
+            <button key={value} onClick={() => setFilterStatus(value)}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${filterStatus === value ? 'bg-gradient-brand text-white' : 'text-navy-500/60 hover:text-navy-500'}`}>
+              {label}
             </button>
           ))}
         </div>
@@ -302,7 +339,7 @@ export default function GoalsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {data.results.map(g => <GoalCard key={g.id} goal={g} />)}
+          {data.results.map(g => <GoalCard key={g.id} goal={g} currentUserId={user?.id} />)}
         </div>
       )}
     </div>

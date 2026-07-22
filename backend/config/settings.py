@@ -151,10 +151,16 @@ X_FRAME_OPTIONS = 'DENY'
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_BROWSER_XSS_FILTER = True
 
+# Trust the reverse proxy's X-Forwarded-Proto so request.scheme is 'https' behind
+# nginx. This must be set regardless of DEBUG: production currently runs with
+# DEBUG=True, and without this Django builds absolute media/file URLs as http://,
+# which the browser then blocks as mixed content on the https:// site.
+# Safe locally too — the header is simply absent when there's no proxy.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 # HTTPS-only settings — only enforce when not running locally
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SESSION_COOKIE_SECURE = True
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Strict'

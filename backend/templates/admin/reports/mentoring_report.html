@@ -1,0 +1,300 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}Mentoring Contact Report | SPT Mentoring Admin{% endblock %}
+
+{% block content_title %}<h1>Mentoring Contact Report</h1>{% endblock %}
+
+{% block content %}
+
+{# ── Filter bar ─────────────────────────────────────────────────────────── #}
+<form method="get" style="
+  background:#fff;border-radius:14px;padding:18px 24px;
+  box-shadow:0 2px 8px rgba(69,39,160,0.08);border:1px solid #e8e4f5;
+  margin-bottom:24px;display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px;
+">
+  <div>
+    <label style="display:block;font-size:0.72rem;font-weight:700;color:#6b6b8a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">
+      Chase threshold (days)
+    </label>
+    <input type="number" name="days" value="{{ days }}" min="1" max="365" style="
+      border:1px solid #d8d3f0;border-radius:8px;padding:7px 12px;
+      font-size:0.85rem;width:100px;
+    ">
+  </div>
+
+  <div>
+    <label style="display:block;font-size:0.72rem;font-weight:700;color:#6b6b8a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">
+      Cohort
+    </label>
+    <select name="cohort" style="
+      border:1px solid #d8d3f0;border-radius:8px;padding:7px 12px;
+      font-size:0.85rem;min-width:200px;
+    ">
+      <option value="">— All cohorts —</option>
+      {% for c in cohorts %}
+        <option value="{{ c.pk }}" {% if cohort_id == c.pk|stringformat:"s" %}selected{% endif %}>
+          {{ c.programme.name }} – {{ c.name }} ({{ c.year }})
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:8px;padding-bottom:2px;">
+    <input type="checkbox" id="inactive" name="inactive" value="1" {% if inactive %}checked{% endif %}
+      style="accent-color:#4527a0;width:15px;height:15px;">
+    <label for="inactive" style="font-size:0.83rem;font-weight:600;color:#1d1464;cursor:pointer;">
+      Include inactive matches
+    </label>
+  </div>
+
+  <button type="submit" style="
+    background:linear-gradient(120deg,#4527a0 0%,#6a3fc8 100%);
+    color:#fff;border:none;border-radius:8px;padding:8px 20px;
+    font-size:0.83rem;font-weight:700;cursor:pointer;
+  ">Apply filters</button>
+
+  <a href="export/?days={{ days }}&cohort={{ cohort_id }}&inactive={% if inactive %}1{% endif %}"
+    style="
+    background:#f8f7fc;border:1px solid #d8d3f0;border-radius:8px;
+    padding:8px 16px;font-size:0.83rem;font-weight:700;
+    color:#4527a0;text-decoration:none;display:inline-flex;align-items:center;gap:6px;
+  ">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>
+    Export CSV
+  </a>
+</form>
+
+{# ── Summary stats ──────────────────────────────────────────────────────── #}
+<div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:24px;">
+
+  {% for label, value, colour in stats %}{% endfor %}
+
+  <div style="background:#fff;border-radius:12px;padding:16px 22px;border:1px solid #e8e4f5;box-shadow:0 2px 8px rgba(69,39,160,0.06);min-width:140px;flex:1;">
+    <p style="font-size:1.8rem;font-weight:800;color:#4527a0;margin:0;line-height:1;">{{ active_pairs }}</p>
+    <p style="font-size:0.75rem;font-weight:600;color:#6b6b8a;margin:4px 0 0;">Active pairs</p>
+  </div>
+
+  <div style="background:#fff;border-radius:12px;padding:16px 22px;border:1px solid {% if needs_chase %}#fde68a{% else %}#e8e4f5{% endif %};box-shadow:0 2px 8px rgba(69,39,160,0.06);min-width:140px;flex:1;">
+    <p style="font-size:1.8rem;font-weight:800;color:{% if needs_chase %}#d97706{% else %}#aaa{% endif %};margin:0;line-height:1;">{{ needs_chase }}</p>
+    <p style="font-size:0.75rem;font-weight:600;color:#6b6b8a;margin:4px 0 0;">Need chasing <span style="opacity:.6;">({{ days }}d threshold)</span></p>
+  </div>
+
+  <div style="background:#fff;border-radius:12px;padding:16px 22px;border:1px solid {% if no_contact %}#fecaca{% else %}#e8e4f5{% endif %};box-shadow:0 2px 8px rgba(69,39,160,0.06);min-width:140px;flex:1;">
+    <p style="font-size:1.8rem;font-weight:800;color:{% if no_contact %}#dc2626{% else %}#aaa{% endif %};margin:0;line-height:1;">{{ no_contact }}</p>
+    <p style="font-size:0.75rem;font-weight:600;color:#6b6b8a;margin:4px 0 0;">No messages yet</p>
+  </div>
+
+  <div style="background:#fff;border-radius:12px;padding:16px 22px;border:1px solid {% if unmatched %}#fed7aa{% else %}#e8e4f5{% endif %};box-shadow:0 2px 8px rgba(69,39,160,0.06);min-width:140px;flex:1;">
+    <p style="font-size:1.8rem;font-weight:800;color:{% if unmatched %}#ea580c{% else %}#aaa{% endif %};margin:0;line-height:1;">{{ unmatched|length }}</p>
+    <p style="font-size:0.75rem;font-weight:600;color:#6b6b8a;margin:4px 0 0;">Unmatched scholars</p>
+  </div>
+
+</div>
+
+{# ── Main table ─────────────────────────────────────────────────────────── #}
+{% if rows %}
+<div style="
+  background:#fff;border-radius:14px;overflow:hidden;
+  border:1px solid #e8e4f5;box-shadow:0 2px 8px rgba(69,39,160,0.06);
+  margin-bottom:32px;overflow-x:auto;
+">
+  <table style="width:max-content;min-width:100%;border-collapse:collapse;font-size:0.82rem;">
+    <thead>
+      <tr style="background:linear-gradient(120deg,#4527a0 0%,#6a3fc8 100%);color:#fff;">
+        <th style="padding:12px 14px;text-align:left;font-weight:700;white-space:nowrap;">Scholar</th>
+        <th style="padding:12px 14px;text-align:left;font-weight:700;white-space:nowrap;min-width:200px;">Cohort</th>
+        <th style="padding:12px 14px;text-align:left;font-weight:700;white-space:nowrap;">Mentor</th>
+        <th style="padding:12px 14px;text-align:left;font-weight:700;white-space:nowrap;">Company</th>
+        <th style="padding:12px 14px;text-align:center;font-weight:700;white-space:nowrap;">Scholar msgs</th>
+        <th style="padding:12px 14px;text-align:left;font-weight:700;white-space:nowrap;">Scholar last contact</th>
+        <th style="padding:12px 14px;text-align:center;font-weight:700;white-space:nowrap;">Mentor msgs</th>
+        <th style="padding:12px 14px;text-align:left;font-weight:700;white-space:nowrap;">Mentor last contact</th>
+        <th style="padding:12px 14px;text-align:center;font-weight:700;white-space:nowrap;">Status</th>
+        <th style="padding:12px 14px;text-align:center;font-weight:700;white-space:nowrap;">Matched</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr style="
+        border-top:1px solid #f0eef8;
+        background:{% if row.needs_chase %}#fffbeb{% elif row.no_contact %}#fff8f8{% else %}#fff{% endif %};
+        transition:background .12s;
+      "
+      onmouseover="this.style.background='#f8f6ff'" onmouseout="this.style.background='{% if row.needs_chase %}#fffbeb{% else %}#fff{% endif %}'">
+
+        {# Scholar #}
+        <td style="padding:11px 14px;white-space:nowrap;">
+          <a href="/admin/users/user/{{ row.scholar_id }}/change/" style="font-weight:700;color:#1d1464;text-decoration:none;">
+            {{ row.scholar_name }}
+          </a>
+          <br>
+          <span style="font-size:0.74rem;color:#8c8ca8;">{{ row.scholar_email }}</span>
+        </td>
+
+        {# Cohort #}
+        <td style="padding:11px 14px;min-width:220px;max-width:300px;">
+          {% if row.scholar_cohorts %}
+            <div style="display:flex;flex-wrap:wrap;gap:4px;">
+            {% for cohort_str in row.scholar_cohorts %}
+              <span style="display:inline-block;background:#ede9f9;color:#4527a0;font-size:0.72rem;font-weight:600;padding:2px 8px;border-radius:20px;">
+                {{ cohort_str }}
+              </span>
+            {% endfor %}
+            </div>
+          {% else %}
+            <span style="color:#ccc;">—</span>
+          {% endif %}
+        </td>
+
+        {# Mentor #}
+        <td style="padding:11px 14px;white-space:nowrap;">
+          <a href="/admin/users/user/{{ row.mentor_id }}/change/" style="font-weight:700;color:#1d1464;text-decoration:none;">
+            {{ row.mentor_name }}
+          </a>
+          <br>
+          <span style="font-size:0.74rem;color:#8c8ca8;">{{ row.mentor_email }}</span>
+        </td>
+
+        {# Company #}
+        <td style="padding:11px 14px;color:#6b6b8a;white-space:nowrap;">
+          {{ row.mentor_company|default:"—" }}
+        </td>
+
+        {# Scholar msgs #}
+        <td style="padding:11px 14px;text-align:center;">
+          <span style="font-weight:800;font-size:1.05rem;color:{% if row.scholar_total %}#4527a0{% else %}#ccc{% endif %};">
+            {{ row.scholar_total }}
+          </span>
+        </td>
+
+        {# Scholar last contact #}
+        <td style="padding:11px 14px;white-space:nowrap;">
+          {% if row.scholar_last %}
+            <span style="font-weight:600;color:#1d1464;">
+              {{ row.scholar_last|date:"j M Y" }}
+            </span>
+            <br>
+            {% if row.scholar_days_since == 0 %}
+              <span style="font-size:0.74rem;color:#16a34a;font-weight:600;">Today</span>
+            {% elif row.scholar_days_since <= days %}
+              <span style="font-size:0.74rem;color:#4527a0;">{{ row.scholar_days_since }}d ago</span>
+            {% else %}
+              <span style="font-size:0.74rem;color:#d97706;font-weight:700;">{{ row.scholar_days_since }}d ago</span>
+            {% endif %}
+          {% else %}
+            <span style="color:#dc2626;font-weight:700;font-size:0.8rem;">No messages</span>
+          {% endif %}
+        </td>
+
+        {# Mentor msgs #}
+        <td style="padding:11px 14px;text-align:center;">
+          <span style="font-weight:800;font-size:1.05rem;color:{% if row.mentor_total %}#4527a0{% else %}#ccc{% endif %};">
+            {{ row.mentor_total }}
+          </span>
+        </td>
+
+        {# Mentor last contact #}
+        <td style="padding:11px 14px;white-space:nowrap;">
+          {% if row.mentor_last %}
+            <span style="font-weight:600;color:#1d1464;">
+              {{ row.mentor_last|date:"j M Y" }}
+            </span>
+            <br>
+            {% if row.mentor_days_since == 0 %}
+              <span style="font-size:0.74rem;color:#16a34a;font-weight:600;">Today</span>
+            {% elif row.mentor_days_since <= days %}
+              <span style="font-size:0.74rem;color:#4527a0;">{{ row.mentor_days_since }}d ago</span>
+            {% else %}
+              <span style="font-size:0.74rem;color:#d97706;font-weight:700;">{{ row.mentor_days_since }}d ago</span>
+            {% endif %}
+          {% else %}
+            <span style="color:#dc2626;font-weight:700;font-size:0.8rem;">No messages</span>
+          {% endif %}
+        </td>
+
+        {# Status badge #}
+        <td style="padding:11px 14px;text-align:center;white-space:nowrap;">
+          {% if not row.match_active %}
+            <span style="background:#f3f4f6;color:#6b7280;font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:20px;">
+              Inactive
+            </span>
+          {% elif row.scholar_total == 0 and row.mentor_total == 0 %}
+            <span style="background:#fef2f2;color:#dc2626;font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:20px;">
+              No contact
+            </span>
+          {% elif row.needs_chase %}
+            <span style="background:#fffbeb;color:#d97706;font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid #fde68a;">
+              Chase needed
+            </span>
+          {% else %}
+            <span style="background:#f0fdf4;color:#16a34a;font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:20px;">
+              Active
+            </span>
+          {% endif %}
+        </td>
+
+        {# Matched on #}
+        <td style="padding:11px 14px;text-align:center;white-space:nowrap;color:#6b6b8a;font-size:0.78rem;">
+          {{ row.matched_on|date:"j M Y" }}
+        </td>
+
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div style="background:#fff;border-radius:14px;padding:40px;text-align:center;border:1px solid #e8e4f5;margin-bottom:32px;">
+  <p style="color:#6b6b8a;font-size:0.9rem;">No matches found for the selected filters.</p>
+</div>
+{% endif %}
+
+{# ── Unmatched scholars ─────────────────────────────────────────────────── #}
+{% if unmatched %}
+<div style="
+  background:#fff;border-radius:14px;overflow:hidden;
+  border:1px solid #fed7aa;box-shadow:0 2px 8px rgba(234,88,12,0.06);
+">
+  <div style="background:linear-gradient(120deg,#ea580c 0%,#f97316 100%);padding:12px 20px;display:flex;align-items:center;gap:10px;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+    </svg>
+    <span style="color:#fff;font-weight:700;font-size:0.85rem;">
+      Unmatched Scholars — {{ unmatched|length }} scholar{{ unmatched|length|pluralize }} without an active mentor
+    </span>
+  </div>
+  <table style="width:max-content;min-width:100%;border-collapse:collapse;font-size:0.82rem;">
+    <thead>
+      <tr style="background:#fff7ed;">
+        <th style="padding:10px 16px;text-align:left;font-weight:700;color:#7c2d12;">Scholar</th>
+        <th style="padding:10px 16px;text-align:left;font-weight:700;color:#7c2d12;">Email</th>
+        <th style="padding:10px 16px;text-align:left;font-weight:700;color:#7c2d12;">University / Course</th>
+        <th style="padding:10px 16px;text-align:left;font-weight:700;color:#7c2d12;">Discipline</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for scholar in unmatched %}
+      <tr style="border-top:1px solid #fff7ed;">
+        <td style="padding:10px 16px;">
+          <a href="/admin/users/user/{{ scholar.pk }}/change/" style="font-weight:700;color:#1d1464;text-decoration:none;">
+            {{ scholar.full_name }}
+          </a>
+        </td>
+        <td style="padding:10px 16px;color:#6b6b8a;">{{ scholar.email }}</td>
+        <td style="padding:10px 16px;color:#6b6b8a;">
+          {% with sp=scholar.scholar_profile %}
+            {% if sp %}{{ sp.university }}{% if sp.university and sp.course %} / {% endif %}{{ sp.course }}{% else %}—{% endif %}
+          {% endwith %}
+        </td>
+        <td style="padding:10px 16px;color:#6b6b8a;">{{ scholar.engineering_discipline|default:"—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% endblock %}

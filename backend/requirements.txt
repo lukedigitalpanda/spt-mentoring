@@ -25,3 +25,8 @@ factory-boy==3.3.0
 pywebpush==2.0.0
 daphne==4.0.0
 whitenoise==6.6.0
+django-jazzmin==2.6.0
+emoji>=2.0
+grapheme>=0.6
+PyJWT==2.9.0
+cryptography==43.0.1

@@ -1,0 +1,154 @@
+{% load i18n %}
+{# Admin "Action Required" to-do panel — rendered by {% admin_todo_panel %} templatetag #}
+
+<div id="spt-todo-panel" style="
+  margin-bottom: 28px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid {% if has_actions %}#f8c8e8{% else %}#e8e4f5{% endif %};
+  box-shadow: 0 2px 8px rgba(69,39,160,0.08);
+">
+  <div style="
+    background: {% if has_actions %}linear-gradient(120deg,#e01e8c 0%,#c01070 100%){% else %}linear-gradient(120deg,#4527a0 0%,#6a3fc8 100%){% endif %};
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  ">
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      {% if has_actions %}
+      <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+      {% else %}
+      <polyline points="20 6 9 17 4 12"/>
+      {% endif %}
+    </svg>
+    <span style="color:#fff;font-weight:700;font-size:0.85rem;letter-spacing:0.02em;">
+      {% if has_actions %}
+        Action Required — {{ total_actions }} item{{ total_actions|pluralize }} need{{ total_actions|pluralize:"s," }} your attention
+      {% else %}
+        All clear — no items require attention right now
+      {% endif %}
+    </span>
+  </div>
+
+  <div style="background:#fff;padding:16px 20px;">
+    <div style="display:flex;flex-wrap:wrap;gap:12px;">
+
+      <!-- Flagged messages -->
+      <a href="/admin/messaging/message/?status=flagged" style="
+        display:flex;align-items:center;gap:10px;
+        background:{% if flagged_messages %}#fdf0f8{% else %}#f8f7fc{% endif %};
+        border:1px solid {% if flagged_messages %}#f0b8d8{% else %}#e8e4f5{% endif %};
+        border-radius:10px;padding:12px 16px;text-decoration:none;
+        min-width:180px;flex:1;
+      ">
+        <span style="
+          font-size:1.3rem;font-weight:800;
+          color:{% if flagged_messages %}#e01e8c{% else %}#aaa{% endif %};
+          line-height:1;min-width:28px;text-align:center;
+        ">{{ flagged_messages }}</span>
+        <div>
+          <p style="margin:0;font-size:0.8rem;font-weight:600;color:{% if flagged_messages %}#1d1464{% else %}#aaa{% endif %};">
+            Flagged message{{ flagged_messages|pluralize }}
+          </p>
+          <p style="margin:0;font-size:0.72rem;color:#6b6b8a;">
+            {% if flagged_messages %}Awaiting approve / reject{% else %}None pending{% endif %}
+          </p>
+        </div>
+      </a>
+
+      <!-- Blocked messages (auto-rejected, audit visibility — P1-1f/P1-1g) -->
+      <a href="/admin/messaging/message/?status=blocked" style="
+        display:flex;align-items:center;gap:10px;
+        background:{% if blocked_messages %}#fef2f2{% else %}#f8f7fc{% endif %};
+        border:1px solid {% if blocked_messages %}#fecaca{% else %}#e8e4f5{% endif %};
+        border-radius:10px;padding:12px 16px;text-decoration:none;
+        min-width:180px;flex:1;
+      ">
+        <span style="
+          font-size:1.3rem;font-weight:800;
+          color:{% if blocked_messages %}#b91c1c{% else %}#aaa{% endif %};
+          line-height:1;min-width:28px;text-align:center;
+        ">{{ blocked_messages }}</span>
+        <div>
+          <p style="margin:0;font-size:0.8rem;font-weight:600;color:{% if blocked_messages %}#1d1464{% else %}#aaa{% endif %};">
+            Blocked message{{ blocked_messages|pluralize }} (last 7 days)
+          </p>
+          <p style="margin:0;font-size:0.72rem;color:#6b6b8a;">
+            {% if blocked_messages %}Auto-rejected — no action needed, click to review{% else %}None blocked recently{% endif %}
+          </p>
+        </div>
+      </a>
+
+      <!-- Pending / flagged forum posts -->
+      <a href="/admin/forums/post/?status=flagged" style="
+        display:flex;align-items:center;gap:10px;
+        background:{% if pending_posts %}#fffbeb{% else %}#f8f7fc{% endif %};
+        border:1px solid {% if pending_posts %}#fde68a{% else %}#e8e4f5{% endif %};
+        border-radius:10px;padding:12px 16px;text-decoration:none;
+        min-width:180px;flex:1;
+      ">
+        <span style="
+          font-size:1.3rem;font-weight:800;
+          color:{% if pending_posts %}#d97706{% else %}#aaa{% endif %};
+          line-height:1;min-width:28px;text-align:center;
+        ">{{ pending_posts }}</span>
+        <div>
+          <p style="margin:0;font-size:0.8rem;font-weight:600;color:{% if pending_posts %}#1d1464{% else %}#aaa{% endif %};">
+            Forum post{{ pending_posts|pluralize }} pending review
+          </p>
+          <p style="margin:0;font-size:0.72rem;color:#6b6b8a;">
+            {% if pending_posts %}Flagged or held for moderation{% else %}None pending{% endif %}
+          </p>
+        </div>
+      </a>
+
+      <!-- Open abuse / safeguarding reports -->
+      <a href="/admin/messaging/abusereport/" style="
+        display:flex;align-items:center;gap:10px;
+        background:{% if open_reports %}#fef2f2{% else %}#f8f7fc{% endif %};
+        border:1px solid {% if open_reports %}#fecaca{% else %}#e8e4f5{% endif %};
+        border-radius:10px;padding:12px 16px;text-decoration:none;
+        min-width:180px;flex:1;
+      ">
+        <span style="
+          font-size:1.3rem;font-weight:800;
+          color:{% if open_reports %}#dc2626{% else %}#aaa{% endif %};
+          line-height:1;min-width:28px;text-align:center;
+        ">{{ open_reports }}</span>
+        <div>
+          <p style="margin:0;font-size:0.8rem;font-weight:600;color:{% if open_reports %}#1d1464{% else %}#aaa{% endif %};">
+            Safeguarding report{{ open_reports|pluralize }}
+          </p>
+          <p style="margin:0;font-size:0.72rem;color:#6b6b8a;">
+            {% if open_reports %}Open / under review{% else %}None open{% endif %}
+          </p>
+        </div>
+      </a>
+
+      <!-- Support conversations -->
+      <a href="/admin/messaging/conversation/?support=yes" style="
+        display:flex;align-items:center;gap:10px;
+        background:{% if support_convs %}#f0f4ff{% else %}#f8f7fc{% endif %};
+        border:1px solid {% if support_convs %}#c7d2fe{% else %}#e8e4f5{% endif %};
+        border-radius:10px;padding:12px 16px;text-decoration:none;
+        min-width:180px;flex:1;
+      ">
+        <span style="
+          font-size:1.3rem;font-weight:800;
+          color:{% if support_convs %}#4527a0{% else %}#aaa{% endif %};
+          line-height:1;min-width:28px;text-align:center;
+        ">{{ support_convs }}</span>
+        <div>
+          <p style="margin:0;font-size:0.8rem;font-weight:600;color:{% if support_convs %}#1d1464{% else %}#aaa{% endif %};">
+            Support message{{ support_convs|pluralize }} to Arkwright
+          </p>
+          <p style="margin:0;font-size:0.72rem;color:#6b6b8a;">
+            {% if support_convs %}Scholar support conversations{% else %}No active support threads{% endif %}
+          </p>
+        </div>
+      </a>
+
+    </div>
+  </div>
+</div>

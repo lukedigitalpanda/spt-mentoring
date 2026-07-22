@@ -139,7 +139,7 @@ export default function MessagesScreen() {
 
   return (
     <View style={styles.container}>
-      {user?.role === 'scholar' && (
+      {(user?.role === 'scholar' || user?.role === 'mentor') && (
         <TouchableOpacity
           style={[styles.supportBtn, contactSupport.isPending && { opacity: 0.6 }]}
           onPress={() => contactSupport.mutate()}

@@ -17,6 +17,9 @@ import SessionsPage from './pages/SessionsPage';
 import GoalsPage from './pages/GoalsPage';
 import NotificationsPage from './pages/NotificationsPage';
 import MentorDiscoveryPage from './pages/MentorDiscoveryPage';
+import ImpersonatePage from './pages/ImpersonatePage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -46,6 +49,9 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password/:uid/:token" element={<ResetPasswordPage />} />
+          <Route path="/impersonate" element={<ImpersonatePage />} />
           <Route
             path="/*"
             element={

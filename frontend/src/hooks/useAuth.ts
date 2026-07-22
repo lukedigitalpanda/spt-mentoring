@@ -29,6 +29,11 @@ export const useAuth = create<AuthState>()(
       logout: () => {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
+        // Clear any impersonation state so the banner can't linger into the
+        // next session in this browser.
+        localStorage.removeItem('admin_access_token');
+        localStorage.removeItem('admin_refresh_token');
+        localStorage.removeItem('impersonation_active');
         set({ user: null, isAuthenticated: false });
       },
 

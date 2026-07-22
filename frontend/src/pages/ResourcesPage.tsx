@@ -82,7 +82,17 @@ function ResourceCard({ resource }: { resource: Resource }) {
     if (resource.resource_type === 'link' && resource.url) {
       window.open(resource.url, '_blank', 'noopener,noreferrer');
     } else if (resource.file) {
-      window.open(resource.file, '_blank', 'noopener,noreferrer');
+      // RES-02: use a real download anchor so the file reliably saves across
+      // browsers, instead of opening inline in a new tab (which some browsers
+      // render rather than download). Media is same-origin so the filename hint
+      // is honoured.
+      const a = document.createElement('a');
+      a.href = resource.file;
+      a.download = resource.title || '';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
     }
   };
 

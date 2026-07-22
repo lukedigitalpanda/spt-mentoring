@@ -1,0 +1,42 @@
+emojis,meaning,context,severity,notes
+🍆,Penis or erection,Sexting,MEDIUM,Aubergine — classic sexting emoji. Single-emoji low-confidence but escalate in combo.
+🌽,Penis or erection,Sexting,LOW,Corn — less common but documented. High false-positive rate in food contexts.
+💦,Blowjob / ejaculation,Sexting,MEDIUM,Sweat droplets. Very high false-positive rate alone (exercise/weather). CRITICAL in combo with 🍆 🍑 👅 👄.
+💎,Pure / high-grade drugs,Drug selling/buying online / class A drugs,MEDIUM,Diamond emoji used for crystal meth / high-purity.
+🍑,Bum / buttocks,Sexting,MEDIUM,Peach. Very common in sexting.
+👀,Parents are watching,Parent/carer involvement / digital penetration,LOW,Eyes. Alerts another party that supervision is present — safeguarding signal.
+👉👌,Sex,Sexting,HIGH,Pointing finger + OK hand — explicit gesture combo.
+🍆🍑,Anal sex,Sexting,HIGH,Aubergine + peach combo.
+😩💦,Masturbation,Sexting,HIGH,Weary face + sweat droplets combo.
+🍃,Marijuana / cannabis,Drug selling/buying online,MEDIUM,Leaf fluttering in wind — common cannabis code.
+🌿,Marijuana / cannabis,Drug selling/buying online,MEDIUM,Herb emoji.
+🌲,Marijuana / cannabis,Drug selling/buying online,LOW,Evergreen tree — lower-confidence cannabis reference.
+🌳,Marijuana / cannabis,Drug selling/buying online,LOW,Deciduous tree.
+💨,Marijuana / cannabis / smoking,Drug selling/buying online,MEDIUM,Dash / smoke puff — smoking reference.
+🔥,Marijuana / cannabis / high potency,Drug selling/buying online,LOW,Fire. Extremely high false-positive rate alone. Escalate only in drug-term context.
+🌟,Marijuana / cannabis,Drug selling/buying online,LOW,Glowing star — low-confidence.
+📸,Selfie,Sexting,LOW,Camera with flash. Context-dependent.
+📱💃,Private dance / performance,Sexting,HIGH,Phone + dancer — live-performance request.
+👍,Call me,Sexting,LOW,Thumbs up — ambiguous. Low confidence.
+👋🖐️,Spanking,Sexting,MEDIUM,Waving / raised hand combo.
+💦😮😛,Orgasm,Sexting,HIGH,Sweat + mouth open + tongue — explicit combo.
+👅,Oral sex,Sexting,HIGH,Tongue emoji.
+🌮🍩🌷🐱,Vagina,Sexting,MEDIUM,Taco / donut / tulip / cat face — multiple vaginal code emojis. Individually lower confidence; combo or in sexual context HIGH.
+❄️🥛⚪🎱,Cocaine,Drug selling/buying online,HIGH,Snowflake / milk / white circle / 8-ball — cocaine code emojis.
+🍒🍓🍈🐫,Breasts,Sexting,MEDIUM,Cherries / strawberry / melon / camel — breast code emojis. Combo in sexual context HIGH.
+👉🌭,Sexual intercourse,Sexting,HIGH,Pointing finger + hot dog.
+🏩🐫🗾,Sexual intercourse,Sexting,HIGH,Love hotel / camel / Japan map.
+👃,Sniffing / using drugs,Drug selling/buying online,MEDIUM,Nose — snorting reference.
+👀,Use of drugs,Drug selling/buying online,LOW,Googly eyes — also used as "parents watching". Context-dependent.
+💊,Drugs,Drug selling/buying online,HIGH,Pill emoji — direct reference.
+🚗,Sexual intercourse,Sexting,MEDIUM,Car emoji — used in sexting slang.
+😈,Horny / turned on / aroused,Sexting,MEDIUM,Smiling face with horns.
+🍆👉,Erection,Sexting,HIGH,Aubergine + pointing combo.
+💵💯,'Go for it' / consent,Sexting,MEDIUM,Money + 100 — agreement/consent signal.
+🚦,'Go for it' / consent,Sexting,LOW,Traffic light — green-light signal.
+🎱,(8 Ball) an 8th of cannabis,Drug selling/buying online,HIGH,"8-ball — specific quantity reference (1/8 oz). Also used for cocaine (see above)."
+💎❄️🏔️⚪,Methamphetamine,Drug selling/buying online,HIGH,Diamond / snowflake / mountain / white circle — meth code.
+🚀,Potency of drugs,Drug selling/buying online,MEDIUM,Rocket — high-strength signal.
+💥,Drug dealer,Drug selling/buying online,MEDIUM,Collision / explosion — dealer signal.
+💉🍬🐉🐎,Heroin,Drug selling/buying online,HIGH,Syringe / candy / dragon / horse — heroin code emojis.
+🔥,Quality of drug,Drug selling/buying online,LOW,Fire — quality signal. Same false-positive concern as cannabis row.

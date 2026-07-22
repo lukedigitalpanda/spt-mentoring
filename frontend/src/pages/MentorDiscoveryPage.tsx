@@ -1,7 +1,17 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
+import { useAuth } from '../hooks/useAuth';
+import { userHasRole } from '../utils/roles';
+
+interface WaitingListEntry {
+  id: number;
+  scholar: number;
+  engineering_discipline: string;
+  requested_at: string;
+  is_matched: boolean;
+}
 
 interface MentorCard {
   id: number;
@@ -10,6 +20,7 @@ interface MentorCard {
   last_name: string;
   email: string;
   engineering_discipline: string;
+  engineering_disciplines: string[];
   location: string;
   bio: string;
   avg_rating: number;
@@ -20,7 +31,7 @@ interface MentorCard {
     job_title: string;
     years_experience: number;
     max_scholars: number;
-    skills: string[];
+    specialisms: string[];
   };
 }
 
@@ -28,6 +39,23 @@ const DISCIPLINES = [
   'Mechanical', 'Electrical', 'Civil', 'Chemical', 'Software',
   'Aerospace', 'Biomedical', 'Environmental', 'Materials', 'Other',
 ];
+
+// Derive avatar initials defensively. The list API may omit first_name/last_name,
+// so fall back to full_name so the card never crashes on undefined access.
+function getInitials(mentor: MentorCard): string {
+  const first = mentor.first_name?.trim();
+  const last = mentor.last_name?.trim();
+  if (first || last) {
+    return `${first?.[0] ?? ''}${last?.[0] ?? ''}`.toUpperCase();
+  }
+  const parts = (mentor.full_name ?? '').trim().split(/\s+/).filter(Boolean);
+  return parts.slice(0, 2).map(p => p[0]).join('').toUpperCase();
+}
+
+// First name for friendly copy, falling back to the first word of full_name.
+function firstNameOf(mentor: MentorCard): string {
+  return (mentor.first_name?.trim() || (mentor.full_name ?? '').trim().split(/\s+/)[0] || 'this mentor');
+}
 
 function StarRating({ value, size = 'sm' }: { value: number; size?: 'sm' | 'md' }) {
   const sz = size === 'md' ? 'w-5 h-5' : 'w-3.5 h-3.5';
@@ -47,7 +75,7 @@ function StarRating({ value, size = 'sm' }: { value: number; size?: 'sm' | 'md' 
 }
 
 function MentorCard({ mentor, onBook }: { mentor: MentorCard; onBook: (m: MentorCard) => void }) {
-  const initials = `${mentor.first_name[0] ?? ''}${mentor.last_name[0] ?? ''}`;
+  const initials = getInitials(mentor);
 
   return (
     <div className="bg-white rounded-2xl shadow-card border border-purple-100 overflow-hidden hover:shadow-brand transition-all group">
@@ -91,14 +119,19 @@ function MentorCard({ mentor, onBook }: { mentor: MentorCard; onBook: (m: Mentor
           </div>
         </div>
 
-        {/* Discipline pill */}
-        {mentor.engineering_discipline && (
-          <div className="mt-3">
-            <span className="inline-block text-[11px] font-semibold bg-purple-50 text-purple-700 px-2.5 py-1 rounded-full">
-              {mentor.engineering_discipline}
-            </span>
+        {/* Discipline pills */}
+        {((mentor.engineering_disciplines?.length ?? 0) > 0 || mentor.engineering_discipline) && (
+          <div className="mt-3 flex flex-wrap gap-1 items-center">
+            {(mentor.engineering_disciplines?.length > 0
+              ? mentor.engineering_disciplines
+              : [mentor.engineering_discipline]
+            ).map(d => (
+              <span key={d} className="inline-block text-[11px] font-semibold bg-purple-50 text-purple-700 px-2.5 py-1 rounded-full">
+                {d}
+              </span>
+            ))}
             {mentor.location && (
-              <span className="inline-block text-[11px] text-navy-500/50 ml-2">
+              <span className="inline-block text-[11px] text-navy-500/50 ml-1">
                 📍 {mentor.location}
               </span>
             )}
@@ -113,15 +146,15 @@ function MentorCard({ mentor, onBook }: { mentor: MentorCard; onBook: (m: Mentor
         )}
 
         {/* Skills */}
-        {mentor.mentor_profile?.skills?.length > 0 && (
+        {(mentor.mentor_profile?.specialisms?.length ?? 0) > 0 && (
           <div className="mt-3 flex flex-wrap gap-1">
-            {mentor.mentor_profile.skills.slice(0, 4).map(skill => (
+            {mentor.mentor_profile!.specialisms.slice(0, 4).map(skill => (
               <span key={skill} className="text-[10px] bg-gray-50 border border-gray-200 text-navy-500/70 px-2 py-0.5 rounded-full">
                 {skill}
               </span>
             ))}
-            {mentor.mentor_profile.skills.length > 4 && (
-              <span className="text-[10px] text-navy-500/40">+{mentor.mentor_profile.skills.length - 4} more</span>
+            {mentor.mentor_profile!.specialisms.length > 4 && (
+              <span className="text-[10px] text-navy-500/40">+{mentor.mentor_profile!.specialisms.length - 4} more</span>
             )}
           </div>
         )}
@@ -155,7 +188,7 @@ function BookRequestModal({ mentor, onClose }: { mentor: MentorCard; onClose: ()
 
         <div className="flex items-center gap-3 mb-5 p-3 bg-purple-50 rounded-xl">
           <div className="w-10 h-10 rounded-full bg-gradient-brand-soft flex items-center justify-center text-white font-bold text-sm">
-            {mentor.first_name[0]}{mentor.last_name[0]}
+            {getInitials(mentor)}
           </div>
           <div>
             <p className="font-semibold text-navy-500 text-sm">{mentor.full_name}</p>
@@ -166,7 +199,7 @@ function BookRequestModal({ mentor, onClose }: { mentor: MentorCard; onClose: ()
         </div>
 
         <p className="text-sm text-navy-500/70 mb-5">
-          Head to the Sessions page to view {mentor.first_name}'s available time slots and book a session.
+          Head to the Sessions page to view {firstNameOf(mentor)}'s available time slots and book a session.
         </p>
 
         <div className="flex gap-3">
@@ -189,6 +222,8 @@ function BookRequestModal({ mentor, onClose }: { mentor: MentorCard; onClose: ()
 }
 
 export default function MentorDiscoveryPage() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
   const [discipline, setDiscipline] = useState('');
   const [search, setSearch] = useState('');
   const [availableOnly, setAvailableOnly] = useState(false);
@@ -198,9 +233,24 @@ export default function MentorDiscoveryPage() {
   if (discipline) params.set('discipline', discipline);
   if (availableOnly) params.set('available', '1');
 
-  const { data: mentors = [], isLoading } = useQuery<MentorCard[]>({
+  const { data: mentors = [], isLoading, isError, refetch } = useQuery<MentorCard[]>({
     queryKey: ['mentors', discipline, availableOnly],
-    queryFn: () => api.get(`/users/mentors/?${params}`).then(r => r.data),
+    // Guard against a non-array payload so a malformed response can never crash the grid.
+    queryFn: () => api.get(`/users/mentors/?${params}`).then(r => (Array.isArray(r.data) ? r.data : [])),
+  });
+
+  // Waiting list (MATCH-02): unmatched scholars can ask to be matched by staff.
+  const isUnmatchedScholar = userHasRole(user, 'scholar') && !user?.has_mentor;
+  const { data: waitingList } = useQuery<{ results: WaitingListEntry[] }>({
+    queryKey: ['waiting-list'],
+    queryFn: () => api.get('/users/waiting-list/').then(r => r.data),
+    enabled: isUnmatchedScholar,
+  });
+  const waitingEntry = waitingList?.results?.find(e => !e.is_matched);
+  const joinWaitingList = useMutation({
+    mutationFn: () =>
+      api.post('/users/waiting-list/', { engineering_discipline: discipline || '' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['waiting-list'] }),
   });
 
   const filtered = mentors.filter(m => {
@@ -209,6 +259,7 @@ export default function MentorDiscoveryPage() {
     return (
       m.full_name.toLowerCase().includes(q) ||
       m.engineering_discipline?.toLowerCase().includes(q) ||
+      m.engineering_disciplines?.some(d => d.toLowerCase().includes(q)) ||
       m.mentor_profile?.job_title?.toLowerCase().includes(q) ||
       m.mentor_profile?.company?.toLowerCase().includes(q) ||
       m.bio?.toLowerCase().includes(q)
@@ -232,6 +283,43 @@ export default function MentorDiscoveryPage() {
           </div>
         </div>
       </div>
+
+      {/* Waiting list banner — unmatched scholars only */}
+      {isUnmatchedScholar && (
+        waitingEntry ? (
+          <div className="bg-green-50 border border-green-200 rounded-2xl p-4 mb-6 flex items-start gap-3">
+            <svg className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <p className="text-sm font-semibold text-green-800">You're on the mentor waiting list</p>
+              <p className="text-xs text-green-700 mt-0.5">
+                Requested on {new Date(waitingEntry.requested_at).toLocaleDateString('en-GB')}.
+                The Smallpeice team will be in touch when a suitable mentor is available.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 mb-6 flex flex-wrap items-center gap-3 justify-between">
+            <div>
+              <p className="text-sm font-semibold text-navy-500">Can't find the right mentor?</p>
+              <p className="text-xs text-navy-500/60 mt-0.5">
+                Join the waiting list and the Smallpeice team will match you with a suitable mentor.
+              </p>
+              {joinWaitingList.isError && (
+                <p className="text-xs text-red-500 mt-1">Could not join the waiting list. Please try again.</p>
+              )}
+            </div>
+            <button
+              onClick={() => joinWaitingList.mutate()}
+              disabled={joinWaitingList.isPending}
+              className="bg-gradient-brand text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:opacity-90 disabled:opacity-50 transition-opacity shadow-brand"
+            >
+              {joinWaitingList.isPending ? 'Joining…' : 'Join Waiting List'}
+            </button>
+          </div>
+        )
+      )}
 
       {/* Filters */}
       <div className="bg-white rounded-2xl shadow-card border border-purple-100 p-4 mb-6 flex flex-wrap gap-3 items-center">
@@ -273,6 +361,21 @@ export default function MentorDiscoveryPage() {
       {isLoading ? (
         <div className="flex justify-center py-20">
           <div className="w-10 h-10 border-4 border-purple-200 border-t-purple-500 rounded-full animate-spin" />
+        </div>
+      ) : isError ? (
+        <div className="text-center py-20 text-navy-500/60">
+          <svg className="w-12 h-12 mx-auto mb-3 text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <p className="font-medium">We could not load mentors right now</p>
+          <p className="text-sm mt-1 mb-4">Please check your connection and try again.</p>
+          <button
+            onClick={() => refetch()}
+            className="bg-gradient-brand text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:opacity-90 transition-opacity shadow-brand"
+          >
+            Try again
+          </button>
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-20 text-navy-500/40">

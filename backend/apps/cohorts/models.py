@@ -33,8 +33,7 @@ class Cohort(models.Model):
     history = HistoricalRecords()
 
     class Meta:
-        unique_together = ('programme', 'year')
-        ordering = ['-year']
+        ordering = ['-year', 'name']
 
     def __str__(self):
         return f'{self.programme.name} – {self.name}'

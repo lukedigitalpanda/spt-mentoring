@@ -57,7 +57,7 @@ function QuestionField({
             key={n}
             type="button"
             onClick={() => onChange(String(n))}
-            className={`w-9 h-9 rounded-lg text-sm font-semibold transition-all ${
+            className={`w-10 h-10 rounded-lg text-sm font-semibold transition-all ${
               value === String(n)
                 ? 'bg-pink-500 text-white shadow-brand'
                 : 'bg-white border border-purple-200 text-navy-500 hover:border-pink-500 hover:text-pink-500'

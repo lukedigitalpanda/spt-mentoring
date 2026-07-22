@@ -95,7 +95,7 @@ export default function ForgotPasswordPage() {
                     required
                     autoComplete="email"
                     placeholder="you@example.com"
-                    className="w-full border-2 border-purple-100 rounded-xl px-4 py-3 text-sm text-navy-500 bg-white focus:outline-none focus:border-pink-500 transition-colors placeholder:text-navy-500/30"
+                    className="w-full border-2 border-purple-100 rounded-xl px-4 py-3 text-base text-navy-500 bg-white focus:outline-none focus:border-pink-500 transition-colors placeholder:text-navy-500/30"
                   />
                 </div>
 

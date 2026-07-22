@@ -652,6 +652,7 @@ export default function MessagesPage() {
                     <Link
                       to="/profile#documents"
                       title="Shared documents"
+                      aria-label="Shared documents"
                       className="flex items-center gap-1 text-xs font-semibold text-purple-500 hover:text-pink-500 transition-colors"
                     >
                       <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

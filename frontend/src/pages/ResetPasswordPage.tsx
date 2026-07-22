@@ -103,7 +103,7 @@ export default function ResetPasswordPage() {
                     onChange={e => setPassword(e.target.value)}
                     required
                     autoComplete="new-password"
-                    className="w-full border-2 border-purple-100 rounded-xl px-4 py-3 text-sm text-navy-500 bg-white focus:outline-none focus:border-pink-500 transition-colors"
+                    className="w-full border-2 border-purple-100 rounded-xl px-4 py-3 text-base text-navy-500 bg-white focus:outline-none focus:border-pink-500 transition-colors"
                   />
                 </div>
 
@@ -118,7 +118,7 @@ export default function ResetPasswordPage() {
                     onChange={e => setConfirm(e.target.value)}
                     required
                     autoComplete="new-password"
-                    className="w-full border-2 border-purple-100 rounded-xl px-4 py-3 text-sm text-navy-500 bg-white focus:outline-none focus:border-pink-500 transition-colors"
+                    className="w-full border-2 border-purple-100 rounded-xl px-4 py-3 text-base text-navy-500 bg-white focus:outline-none focus:border-pink-500 transition-colors"
                   />
                 </div>
 

@@ -164,18 +164,18 @@ function UserManagementTab() {
   };
   return (
     <div>
-      <div className="flex justify-between items-start mb-5">
+      <div className="flex flex-wrap justify-between items-start gap-3 mb-5">
         <div>
           <h2 className="text-lg font-extrabold text-navy-500">User Management</h2>
           <p className="text-sm text-navy-500/50 mt-0.5">{data?.count ?? '…'} users</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
           <input
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search by name, email, CRM ID…"
-            className="border-2 border-purple-100 rounded-xl px-3 py-1.5 text-sm text-navy-500 focus:outline-none focus:border-pink-500 transition-colors w-64"
+            className="border-2 border-purple-100 rounded-xl px-3 py-1.5 text-sm text-navy-500 focus:outline-none focus:border-pink-500 transition-colors w-full sm:w-64"
           />
           <a href={`${API}/users/export/`}
             className="inline-flex items-center gap-1.5 border-2 border-purple-200 text-purple-500 text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-purple-50"
@@ -737,12 +737,12 @@ function CohortsTab() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-5">
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-5">
         <div>
           <h2 className="text-lg font-extrabold text-navy-500">Cohorts</h2>
           <p className="text-sm text-navy-500/50 mt-0.5">{cohorts.length} cohort{cohorts.length !== 1 ? 's' : ''}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <select value={filterProgramme} onChange={e => setFilterProgramme(e.target.value)} className="border-2 border-purple-100 rounded-xl px-3 py-1.5 text-sm text-navy-500 focus:outline-none focus:border-pink-500">
             <option value="">All Programmes</option>
             {programmes.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -1120,11 +1120,11 @@ function ResourcesTab() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-5">
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-5">
         <div>
           <h2 className="text-lg font-extrabold text-navy-500">Resources</h2>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="flex rounded-xl border border-purple-200 overflow-hidden">
             {(['resources', 'categories'] as const).map(s => (
               <button key={s} onClick={() => setSubTab(s)}

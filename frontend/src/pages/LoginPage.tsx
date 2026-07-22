@@ -93,7 +93,7 @@ export default function LoginPage() {
                 required
                 autoComplete="email"
                 placeholder="you@example.com"
-                className="w-full border-2 border-purple-100 rounded-xl px-4 py-3 text-sm text-navy-500 bg-white focus:outline-none focus:border-pink-500 transition-colors placeholder:text-navy-500/30"
+                className="w-full border-2 border-purple-100 rounded-xl px-4 py-3 text-base text-navy-500 bg-white focus:outline-none focus:border-pink-500 transition-colors placeholder:text-navy-500/30"
               />
             </div>
 
@@ -113,7 +113,7 @@ export default function LoginPage() {
                 onChange={e => setPassword(e.target.value)}
                 required
                 autoComplete="current-password"
-                className="w-full border-2 border-purple-100 rounded-xl px-4 py-3 text-sm text-navy-500 bg-white focus:outline-none focus:border-pink-500 transition-colors"
+                className="w-full border-2 border-purple-100 rounded-xl px-4 py-3 text-base text-navy-500 bg-white focus:outline-none focus:border-pink-500 transition-colors"
               />
             </div>
 

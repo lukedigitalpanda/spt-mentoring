@@ -94,7 +94,7 @@ export default function NewsArticlePage() {
 
       {/* Body */}
       {item.body && (
-        <div className="prose prose-sm max-w-none text-navy-500/80 leading-relaxed whitespace-pre-wrap">
+        <div className="prose prose-sm max-w-none text-navy-500/80 leading-relaxed whitespace-pre-wrap break-words">
           {item.body}
         </div>
       )}

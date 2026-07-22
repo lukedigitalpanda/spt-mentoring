@@ -9,7 +9,7 @@ import type { Conversation, Message } from '../types';
 const IS_COARSE_POINTER =
   typeof window !== 'undefined' && (window.matchMedia?.('(pointer: coarse)').matches ?? false);
 
-// Per-conversation draft persistence key — survives an orientation-change reload
+// Per-conversation draft persistence key - survives an orientation-change reload
 // in the same tab (sessionStorage), unlike component state.
 const draftKey = (id: number) => `chat-draft-${id}`;
 

@@ -99,6 +99,104 @@ class MessageModerationOutcomeTests(TestCase):
             self.assertNotIn('reviewed by a moderator', m.body.lower())
 
 
+class HeldMessageVisibilityTests(TestCase):
+    """P2-1(a): the sender of a held/blocked message must still see it in
+    their own thread, with a safe, category-level reason. Other participants
+    must never see held/blocked content, recipient privacy is the critical
+    invariant here."""
+
+    def setUp(self):
+        from apps.moderation.service import ModerationService
+        from apps.moderation.models import ModerationTerm
+        ModerationService.invalidate_cache()
+        ModerationTerm.objects.create(
+            term='murder', match_type=ModerationTerm.MatchType.SUBSTRING,
+            severity=ModerationTerm.Severity.CRITICAL, source='bulk_import_v1', is_active=True,
+        )
+        ModerationService.invalidate_cache()
+        self.scholar = make_user('scholar-held@example.com', role=User.Role.SCHOLAR)
+        self.mentor = make_user('mentor-held@example.com', role=User.Role.MENTOR)
+        self.conv = Conversation.objects.create(
+            conversation_type=Conversation.ConversationType.DIRECT, subject='Test'
+        )
+        self.conv.participants.set([self.scholar, self.mentor])
+        self.client_api = APIClient()
+        self.client_api.force_authenticate(self.scholar)
+
+    def tearDown(self):
+        from apps.moderation.service import ModerationService
+        ModerationService.invalidate_cache()
+
+    def test_sender_sees_own_flagged_message_with_status(self):
+        resp = self.client_api.post(
+            '/api/messaging/messages/',
+            {'conversation': self.conv.pk, 'body': 'reach me @ mydomain'},
+        )
+        self.assertEqual(resp.status_code, 202, resp.content)
+        listing = self.client_api.get(f'/api/messaging/messages/?conversation={self.conv.pk}')
+        statuses = {m['id']: m['status'] for m in listing.data['results']}
+        self.assertIn('flagged', statuses.values())
+
+    def test_recipient_does_not_see_held_message(self):
+        resp = self.client_api.post(
+            '/api/messaging/messages/',
+            {'conversation': self.conv.pk, 'body': 'reach me @ mydomain'},
+        )
+        self.assertEqual(resp.status_code, 202, resp.content)
+        held_id = resp.data['message']['id']
+
+        other_client = APIClient()
+        other_client.force_authenticate(self.mentor)
+        listing = other_client.get(f'/api/messaging/messages/?conversation={self.conv.pk}')
+        ids = [m['id'] for m in listing.data['results']]
+        self.assertNotIn(held_id, ids)
+
+    def test_block_response_names_category_not_term(self):
+        resp = self.client_api.post(
+            '/api/messaging/messages/',
+            {'conversation': self.conv.pk, 'body': 'I want to murder someone'},
+        )
+        self.assertEqual(resp.status_code, 400, resp.content)
+        self.assertIn('moderation_reason', resp.data)
+        self.assertNotIn('murder', resp.data['detail'])
+        self.assertNotIn('murder', resp.data['moderation_reason'])
+        self.assertEqual(
+            resp.data['moderation_reason'],
+            'it contains wording that is not permitted on the platform',
+        )
+        self.assertIn('message', resp.data)
+        self.assertEqual(resp.data['message']['status'], 'blocked')
+
+    def test_flagged_response_includes_reason_and_serialised_message(self):
+        resp = self.client_api.post(
+            '/api/messaging/messages/',
+            {'conversation': self.conv.pk, 'body': 'reach me @ mydomain'},
+        )
+        self.assertEqual(resp.status_code, 202, resp.content)
+        self.assertEqual(
+            resp.data['moderation_reason'],
+            'it appears to contain contact details (such as an email address or phone number)',
+        )
+        self.assertIn('message', resp.data)
+        self.assertEqual(resp.data['message']['status'], 'flagged')
+
+    def test_url_fragment_reason_names_web_link(self):
+        from apps.moderation.models import ModerationTerm
+        from apps.moderation.service import ModerationService
+        ModerationTerm.objects.create(
+            term='www', match_type=ModerationTerm.MatchType.URL_FRAGMENT,
+            severity=ModerationTerm.Severity.HIGH, source='bulk_import_v1', is_active=True,
+        )
+        ModerationService.invalidate_cache()
+
+        resp = self.client_api.post(
+            '/api/messaging/messages/',
+            {'conversation': self.conv.pk, 'body': 'visit www.example.com for details'},
+        )
+        self.assertEqual(resp.status_code, 202, resp.content)
+        self.assertEqual(resp.data['moderation_reason'], 'it contains a web link')
+
+
 class MassMessageSendTests(TestCase):
     """MSG-06: mass sends are queued on the worker and return immediately."""
 
@@ -192,6 +290,9 @@ class MessageHistoryTests(TestCase):
         self.assertEqual(bodies[-1], 'message 29')
 
     def test_history_excludes_blocked_and_flagged_for_non_staff(self):
+        """The RECIPIENT of held/blocked content must never see it. The SENDER,
+        however, must still see their own held/blocked messages in their own
+        thread (P2-1a). Recipient privacy is the invariant that matters."""
         Message.objects.create(
             conversation=self.conv, sender=self.scholar,
             body='clean', status=Message.Status.DELIVERED,
@@ -204,7 +305,16 @@ class MessageHistoryTests(TestCase):
             conversation=self.conv, sender=self.scholar,
             body='suspicious', status=Message.Status.FLAGGED,
         )
+
+        # Sender (self.scholar is authenticated on self.client_api) sees all three.
         resp = self.client_api.get(f'/api/messaging/messages/?conversation={self.conv.pk}')
+        bodies = {m['body'] for m in resp.data['results']}
+        self.assertEqual(bodies, {'clean', 'naughty', 'suspicious'})
+
+        # The other participant (recipient) only ever sees delivered content.
+        other_client = APIClient()
+        other_client.force_authenticate(self.mentor)
+        resp = other_client.get(f'/api/messaging/messages/?conversation={self.conv.pk}')
         bodies = [m['body'] for m in resp.data['results']]
         self.assertEqual(bodies, ['clean'])
 

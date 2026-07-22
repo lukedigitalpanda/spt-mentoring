@@ -58,16 +58,23 @@ class ChatConsumer(AsyncWebsocketConsumer):
         message, result = await self._create_and_moderate(user, self.conversation_id, body)
 
         if result.status == 'blocked':
+            from apps.moderation.service import ModerationService
+            reason = ModerationService.sender_facing_reason(result)
             await self.send(text_data=json.dumps({
                 'type': 'message_blocked',
-                'reason': 'Your message contained inappropriate content and could not be sent.',
+                'reason': reason,
+                'message_id': message.pk,
             }))
             return
 
         if result.status == 'flagged':
+            from apps.moderation.service import ModerationService
+            reason = ModerationService.sender_facing_reason(result)
             await self.send(text_data=json.dumps({
                 'type': 'message_flagged',
                 'message': 'Your message is being reviewed by a moderator.',
+                'reason': reason,
+                'message_id': message.pk,
             }))
             return
 

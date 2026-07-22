@@ -1,5 +1,5 @@
 import csv
-from django.db.models import Max
+from django.db.models import Max, Q
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -232,7 +232,14 @@ class MessageViewSet(viewsets.ModelViewSet):
             conversation__participants=user
         )
         if not (user.is_staff or user.role == 'admin'):
-            qs = qs.filter(status=Message.Status.DELIVERED)
+            # Non-staff see every DELIVERED message in the conversation, plus
+            # their own held/blocked messages (P2-1a), but never another
+            # participant's held/blocked content. Recipient privacy is the
+            # invariant that must never break here.
+            qs = qs.filter(
+                Q(status=Message.Status.DELIVERED)
+                | Q(sender=user, status__in=[Message.Status.FLAGGED, Message.Status.BLOCKED])
+            )
         conv_id = self.request.query_params.get('conversation')
         if conv_id:
             qs = qs.filter(conversation_id=conv_id)
@@ -325,25 +332,32 @@ class MessageViewSet(viewsets.ModelViewSet):
         MessageRead.objects.create(message=message, user=request.user)
 
         if result.status == 'blocked':
+            reason = ModerationService.sender_facing_reason(result)
             return Response(
                 {
                     'detail': (
-                        'Your message could not be sent as it contains restricted content. '
-                        'If you believe this is an error please contact support.'
+                        f'Your message could not be sent because {reason}. '
+                        'Please edit it and try again.'
                     ),
                     'moderation_status': 'blocked',
+                    'moderation_reason': reason,
+                    'message': self.get_serializer(message).data,
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if result.status == 'flagged':
+            reason = ModerationService.sender_facing_reason(result)
             return Response(
                 {
                     'detail': (
-                        'Your message has been submitted and is awaiting review '
-                        'before delivery. You will be notified once it has been approved.'
+                        f'Your message has been held for review before delivery because {reason}. '
+                        'A moderator will review it shortly and you will be notified of the outcome. '
+                        'You can edit the message to remove the highlighted issue and resend it.'
                     ),
                     'moderation_status': 'pending_review',
+                    'moderation_reason': reason,
+                    'message': self.get_serializer(message).data,
                 },
                 status=status.HTTP_202_ACCEPTED,
             )

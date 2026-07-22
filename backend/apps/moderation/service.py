@@ -398,7 +398,7 @@ class ModerationService:
             if mt == ModerationTerm.MatchType.URL_FRAGMENT:
                 sev = ModerationTerm.Severity.MEDIUM
 
-            entry = (pattern, row['term'], sev)
+            entry = (pattern, row['term'], sev, mt)
             if sev in (ModerationTerm.Severity.CRITICAL, ModerationTerm.Severity.HIGH):
                 block_patterns.append(entry)
             elif sev == ModerationTerm.Severity.MEDIUM:
@@ -417,14 +417,21 @@ class ModerationService:
 
     @classmethod
     def _collect_text_hits(cls, text: str) -> list[dict]:
-        """Return all matching text-rule hits as dicts with term/severity."""
+        """Return all matching text-rule hits as dicts with term/severity.
+
+        ``match_type`` here is the ORIGINAL ModerationTerm.MatchType the term
+        was defined with (EXACT/SUBSTRING/WILDCARD/REGEX/URL_FRAGMENT), not a
+        generic 'text' placeholder, so downstream code (e.g.
+        sender_facing_reason) can tell a URL-fragment hit apart from any other
+        text-rule hit.
+        """
         hits = []
         for patterns_list in (cls._mt_block_patterns, cls._mt_flag_patterns, cls._mt_low_patterns):
-            for compiled, term_str, severity in patterns_list:
+            for compiled, term_str, severity, match_type in patterns_list:
                 if compiled.search(text):
                     hits.append({
                         'term': term_str,
-                        'match_type': 'text',
+                        'match_type': match_type,
                         'severity': severity,
                         'source': 'text',
                     })
@@ -589,6 +596,23 @@ class ModerationService:
                       else f'score={score} — delivered, audit log only'),
             )
         return ModerationResult(status='delivered', score=0)
+
+    @classmethod
+    def sender_facing_reason(cls, result) -> str:
+        """A safe, category-level explanation of why a message was held or
+        blocked, suitable for showing to the sender who wrote it.
+
+        This must NEVER reveal the specific term, phrase or word list that
+        matched, only the broad category, so the block/flag list itself is
+        never exposed to end users.
+        """
+        note = (result.note or '').lower()
+        rules = result.triggered_rules or []
+        if any(r.get('match_type') == ModerationTerm.MatchType.URL_FRAGMENT for r in rules):
+            return 'it contains a web link'
+        if 'email' in note or 'phone' in note or '@' in note or 'contact' in note:
+            return 'it appears to contain contact details (such as an email address or phone number)'
+        return 'it contains wording that is not permitted on the platform'
 
     @classmethod
     def screen(cls, message) -> ModerationResult:

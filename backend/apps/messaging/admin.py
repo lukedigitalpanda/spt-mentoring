@@ -699,7 +699,12 @@ class MessageAdmin(FormFixMixin, ExportMixin, admin.ModelAdmin):
 
     @admin.action(description='Mark selected as delivered')
     def mark_delivered(self, request, queryset):
-        queryset.update(status=Message.Status.DELIVERED)
+        from apps.moderation.service import ModerationService
+        delivered = 0
+        for msg in queryset:
+            ModerationService.approve(msg, request.user, notes='Bulk approved via admin')
+            delivered += 1
+        self.message_user(request, f'{delivered} message(s) marked delivered.')
 
     @admin.action(description='Mark selected as flagged')
     def mark_flagged(self, request, queryset):

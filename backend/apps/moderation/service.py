@@ -73,6 +73,8 @@ import itertools
 import re
 import logging
 from dataclasses import dataclass, field
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -761,6 +763,46 @@ class ModerationService:
             )
         except Exception:
             logger.exception('Failed to create ModerationLog for approve on message #%d', message.pk)
+
+        # Tell the sender the outcome (the 202 response promised this).  The
+        # recipient notification + debounced email already fire via the
+        # post_save signal (notify_recipients_on_delivered_message) now that
+        # status has flipped to delivered, so we do not duplicate that here.
+        from apps.notifications.models import Notification
+        try:
+            Notification.objects.create(
+                user=message.sender,
+                notification_type=Notification.Type.MESSAGE,
+                title='Your message has been approved',
+                body='Your message has been reviewed and delivered.',
+                link='/messages',
+            )
+        except Exception:
+            logger.exception(
+                'Failed to send approval notification to sender %d for message #%d',
+                message.sender_id, message.pk,
+            )
+
+        # Mirror the WebSocket consumer / REST create path: push the released
+        # message into any open thread. Never let a broadcast failure break
+        # the approval itself, and no-op safely if the channel layer is
+        # unavailable (e.g. some test environments).
+        try:
+            channel_layer = get_channel_layer()
+            if channel_layer is not None:
+                async_to_sync(channel_layer.group_send)(
+                    f'chat_{message.conversation_id}',
+                    {
+                        'type': 'chat_message',
+                        'message_id': message.pk,
+                        'body': message.body,
+                        'sender_id': message.sender_id,
+                        'sender_name': message.sender.full_name,
+                        'sent_at': message.sent_at.isoformat(),
+                    },
+                )
+        except Exception:
+            logger.exception('Failed to broadcast approved message #%d', message.pk)
 
     @classmethod
     def reject(cls, message, admin_user, notes=''):

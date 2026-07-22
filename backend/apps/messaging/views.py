@@ -380,6 +380,8 @@ class MessageViewSet(viewsets.ModelViewSet):
                         'sender_id': request.user.pk,
                         'sender_name': request.user.full_name,
                         'sent_at': message.sent_at.isoformat(),
+                        'attachment_url': message.attachment.url if message.attachment else None,
+                        'attachment_name': message.attachment_name or (message.body if message.attachment else ''),
                     },
                 )
         except Exception:

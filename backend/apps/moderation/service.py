@@ -799,6 +799,8 @@ class ModerationService:
                         'sender_id': message.sender_id,
                         'sender_name': message.sender.full_name,
                         'sent_at': message.sent_at.isoformat(),
+                        'attachment_url': message.attachment.url if message.attachment else None,
+                        'attachment_name': message.attachment_name or (message.body if message.attachment else ''),
                     },
                 )
         except Exception:

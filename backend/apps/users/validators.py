@@ -17,6 +17,9 @@ ALLOWED_ATTACHMENT_TYPES = ALLOWED_IMAGE_TYPES | {
     'text/plain',
     'text/csv',
     'application/csv',
+    # ZIP
+    'application/zip',
+    'application/x-zip-compressed',
 }
 MAX_PROFILE_PICTURE_BYTES = 5 * 1024 * 1024   # 5 MB
 MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024        # 20 MB
@@ -34,6 +37,7 @@ _EXT_TO_MIME = {
     '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     '.txt': 'text/plain',
     '.csv': 'text/csv',
+    '.zip': 'application/zip',
 }
 
 
@@ -58,8 +62,8 @@ def validate_message_attachment(file):
     ct = _get_content_type(file)
     if ct not in ALLOWED_ATTACHMENT_TYPES:
         raise ValidationError(
-            'Attachments must be an image, PDF, Word document, Excel spreadsheet, '
-            'PowerPoint presentation, plain text, or CSV file.'
+            'Attachments must be an image, PDF, Word document, Excel, '
+            'PowerPoint, CSV, text or ZIP file.'
         )
     if file.size > MAX_ATTACHMENT_BYTES:
         raise ValidationError('Attachment must be 20 MB or smaller.')

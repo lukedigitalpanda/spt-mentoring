@@ -1,9 +1,12 @@
 from rest_framework import serializers
+from apps.users.validators import validate_message_attachment
 from .models import Forum, Thread, Post
 
 
 class PostSerializer(serializers.ModelSerializer):
     author_name = serializers.CharField(source='author.full_name', read_only=True)
+    attachment = serializers.FileField(
+        validators=[validate_message_attachment], required=False, allow_null=True)
 
     class Meta:
         model = Post

@@ -1,7 +1,7 @@
 """Single source of truth for the emails the platform sends (read-only catalogue)."""
 from dataclasses import dataclass, field
 
-from apps.messaging.tasks import NO_CONTACT_REMINDER_SUBJECT, SPONSOR_UPDATE_SUBJECT
+from apps.messaging.tasks import MATCH_EMAIL_SUBJECT, NO_CONTACT_REMINDER_SUBJECT, SPONSOR_UPDATE_SUBJECT
 from apps.users.auth_views import PASSWORD_RESET_SUBJECT
 
 
@@ -43,6 +43,18 @@ EMAIL_CATALOGUE = [
         subject='You have {N} new notifications on SPT Mentoring',
         body='Hi {first name},\n\nYou have {counts} on SPT Mentoring:\n\n- {title}\n  {link}\n...\n\nLog in to the SPT Mentoring Platform to read them.',
         source='apps/notifications/digest.py',
+    ),
+    EmailSpec(
+        key='match_assigned', name='Match assigned',
+        trigger='MentoringMatch created or reinstated',
+        recipients='Matched mentor and scholar',
+        subject=MATCH_EMAIL_SUBJECT,
+        body=(
+            'Hi {first name},\n\nYou have been matched with your {mentor/scholar}, {other party '
+            'full name}, on the SPT Arkwright Mentoring Platform.\n\nSend them a message to '
+            'introduce yourself: {link to /messages}\n\nBest regards,\nSPT Mentoring Team'
+        ),
+        source='apps/users/signals.py:ensure_match_conversation -> apps/messaging/tasks.py:send_match_notification_emails',
     ),
     EmailSpec(
         key='mass_message', name='Mass message',
@@ -95,6 +107,7 @@ _CATEGORY_MATCHERS = [
     ('new notifications on SPT Mentoring', 'notification_digest'),
     ('New message from', 'message'),
     ('posted in the forum', 'scholar_forum_post'),
+    ('You have been matched', 'match_assigned'),
     (NO_CONTACT_REMINDER_SUBJECT, 'no_contact_reminder'),
     (SPONSOR_UPDATE_SUBJECT, 'sponsor_update_reminder'),
 ]

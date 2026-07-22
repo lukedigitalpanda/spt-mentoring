@@ -6,6 +6,7 @@ logger = logging.getLogger(__name__)
 
 NO_CONTACT_REMINDER_SUBJECT = 'SPT Mentoring – Time to connect!'
 SPONSOR_UPDATE_SUBJECT = 'SPT Scholarships – Time to update your sponsor'
+MATCH_EMAIL_SUBJECT = 'SPT Mentoring - You have been matched'
 
 
 def build_no_contact_body(first_name):
@@ -23,6 +24,16 @@ def build_sponsor_update_body(first_name, sponsor_name):
         f'Your sponsor {sponsor_name} is due an update from you. '
         'Please log in to the platform and send them an update on your progress.\n\n'
         'Best regards,\nSPT Scholarships Team'
+    )
+
+
+def build_match_email_body(first_name, other_full_name, other_role, link):
+    return (
+        f'Hi {first_name},\n\n'
+        f'You have been matched with your {other_role}, {other_full_name}, '
+        'on the SPT Arkwright Mentoring Platform.\n\n'
+        f'Send them a message to introduce yourself: {link}\n\n'
+        'Best regards,\nSPT Mentoring Team'
     )
 
 
@@ -132,6 +143,40 @@ def send_mass_message_task(mass_message_id):
     msg.recipient_count = len(recipients)
     msg.save(update_fields=['status', 'sent_at', 'recipient_count'])
     logger.info('MassMessage %d sent to %d recipients', mass_message_id, len(recipients))
+
+
+@shared_task
+def send_match_notification_emails(match_id):
+    """Email both parties of a newly created or reinstated mentoring match.
+
+    Names the other party by role (mentor/scholar) and links to /messages.
+    Respects each recipient's notification_email preference; a missing/
+    deactivated match is a silent no-op (it may have been deleted or
+    deactivated again by the time the task runs).
+    """
+    from django.conf import settings
+    from django.core.mail import send_mail
+    from apps.users.models import MentoringMatch
+
+    match = MentoringMatch.objects.select_related('mentor', 'scholar').filter(id=match_id).first()
+    if match is None or not match.is_active:
+        return
+
+    link = f'{settings.FRONTEND_URL}/messages'
+    pairs = [
+        (match.scholar, match.mentor, 'mentor'),
+        (match.mentor, match.scholar, 'scholar'),
+    ]
+    for recipient, other, other_role in pairs:
+        if not (recipient.notification_email and recipient.email):
+            continue
+        send_mail(
+            MATCH_EMAIL_SUBJECT,
+            build_match_email_body(recipient.first_name, other.full_name, other_role, link),
+            settings.DEFAULT_FROM_EMAIL,
+            [recipient.email],
+            fail_silently=True,
+        )
 
 
 @shared_task

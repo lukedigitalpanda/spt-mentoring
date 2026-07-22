@@ -141,3 +141,9 @@ def ensure_match_conversation(sender, instance, created, **kwargs):
             ),
             link='/messages',
         )
+
+    # ── Email ─────────────────────────────────────────────────────────────────
+    # Fires for both the fresh-match and reinstatement branches above; skipped
+    # entirely on deactivation because we returned early when not is_active.
+    from apps.messaging.tasks import send_match_notification_emails
+    send_match_notification_emails.delay(instance.id)

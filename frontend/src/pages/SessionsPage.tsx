@@ -522,11 +522,11 @@ function AvailabilityManager({ userId }: { userId: number }) {
               const bookedCount = daySlots.filter(s => s.is_booked).length;
               return (
                 <div key={dateKey} className="bg-white rounded-2xl shadow-card overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-purple-50">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-bold text-navy-500">{dateLabel}</p>
+                  <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-purple-50 flex-wrap">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <p className="text-sm font-bold text-navy-500 break-words">{dateLabel}</p>
                       {bookedCount > 0 && (
-                        <span className="text-[10px] font-semibold bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">
+                        <span className="text-[10px] font-semibold bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full flex-shrink-0">
                           {bookedCount} booked
                         </span>
                       )}
@@ -534,7 +534,7 @@ function AvailabilityManager({ userId }: { userId: number }) {
                     {hasUnbooked && (
                       <button
                         onClick={() => blockOutDate(dateKey, daySlots)}
-                        className="text-[10px] font-semibold text-red-400 hover:text-red-500 border border-red-200 hover:border-red-400 px-2 py-1 rounded-lg transition-colors whitespace-nowrap">
+                        className="text-[10px] font-semibold text-red-400 hover:text-red-500 border border-red-200 hover:border-red-400 px-2 py-1 rounded-lg transition-colors whitespace-nowrap flex-shrink-0">
                         Block out day
                       </button>
                     )}

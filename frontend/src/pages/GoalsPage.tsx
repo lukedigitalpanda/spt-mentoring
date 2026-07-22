@@ -67,7 +67,7 @@ function MilestoneItem({ milestone, onToggle, onDelete, readOnly = false }: {
           </svg>
         )}
       </button>
-      <span className={`text-xs flex-1 ${milestone.is_completed ? 'line-through text-navy-500/30' : 'text-navy-500/70'}`}>
+      <span className={`text-xs flex-1 min-w-0 break-words ${milestone.is_completed ? 'line-through text-navy-500/30' : 'text-navy-500/70'}`}>
         {milestone.title}
       </span>
       {milestone.due_date && (
@@ -141,7 +141,7 @@ function GoalCard({ goal, currentUserId }: { goal: Goal; currentUserId?: number 
                 </span>
               )}
             </div>
-            <h3 className="font-bold text-sm text-navy-500">{goal.title}</h3>
+            <h3 className="font-bold text-sm text-navy-500 break-words">{goal.title}</h3>
             {goal.description && <p className="text-xs text-navy-500/50 mt-0.5 line-clamp-2">{goal.description}</p>}
           </div>
           {isOwn && (

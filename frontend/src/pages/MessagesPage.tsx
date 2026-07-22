@@ -599,7 +599,7 @@ export default function MessagesPage() {
                         }
                       }}
                       placeholder="Type a message..."
-                      className="flex-1 resize-none overflow-y-auto max-h-40 border-2 border-purple-100 rounded-xl px-4 py-2.5 text-sm text-navy-500 bg-[#faf9fd] focus:outline-none focus:border-pink-500 transition-colors placeholder:text-navy-500/30"
+                      className="flex-1 min-w-0 resize-none overflow-y-auto max-h-40 border-2 border-purple-100 rounded-xl px-4 py-2.5 text-sm text-navy-500 bg-[#faf9fd] focus:outline-none focus:border-pink-500 transition-colors placeholder:text-navy-500/30"
                     />
                     <button
                       onClick={sendMessage}

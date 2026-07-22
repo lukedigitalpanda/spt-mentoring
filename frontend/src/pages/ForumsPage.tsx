@@ -360,7 +360,7 @@ function PostList({
                     )}
                   </div>
                 </div>
-                <p className="text-sm text-navy-500/80 whitespace-pre-wrap">{post.body}</p>
+                <p className="text-sm text-navy-500/80 whitespace-pre-wrap break-words">{post.body}</p>
               </div>
             ))
           )}

@@ -46,9 +46,9 @@ function StatCard({
 }: { label: string; value: string | number; sub?: string; accent?: boolean }) {
   return (
     <div className={`rounded-2xl p-5 shadow-card ${accent ? 'bg-gradient-brand-soft text-white shadow-brand' : 'bg-white'}`}>
-      <p className={`text-xs font-semibold uppercase tracking-wider ${accent ? 'text-white/70' : 'text-navy-500/40'}`}>{label}</p>
-      <p className={`mt-1.5 text-2xl font-extrabold ${accent ? 'text-white' : 'text-navy-500'}`}>{value}</p>
-      {sub && <p className={`mt-1 text-xs ${accent ? 'text-white/60' : 'text-navy-500/40'}`}>{sub}</p>}
+      <p className={`text-xs font-semibold uppercase tracking-wider break-words ${accent ? 'text-white/70' : 'text-navy-500/40'}`}>{label}</p>
+      <p className={`mt-1.5 text-2xl font-extrabold break-words ${accent ? 'text-white' : 'text-navy-500'}`}>{value}</p>
+      {sub && <p className={`mt-1 text-xs break-words ${accent ? 'text-white/60' : 'text-navy-500/40'}`}>{sub}</p>}
     </div>
   );
 }

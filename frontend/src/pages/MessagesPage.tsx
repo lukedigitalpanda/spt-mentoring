@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../utils/api';
 import { useAuth } from '../hooks/useAuth';
 import { userHasRole } from '../utils/roles';
+import RichText from '../components/ui/RichText';
 import type { Conversation, Message } from '../types';
 
 // Touch-first devices get Enter-inserts-newline; sending is via the button only.
@@ -706,6 +707,17 @@ export default function MessagesPage() {
                               </svg>
                               {msg.body}
                             </a>
+                          ) : selectedConvData?.conversation_type === 'mass_message' && idx === 0 ? (
+                            // Only the announcement itself (always the oldest/first
+                            // message - send_mass_message_task creates it synchronously
+                            // before any reply can exist, and messages are ordered
+                            // oldest-first) is a backend-sanitised MassMessage body.
+                            // Replies into this same conversation (when replies_enabled)
+                            // are ordinary, UNsanitised chat messages - idx === 0 keeps
+                            // those on the plain-text path below, same as regular
+                            // chat bubbles. Rich rendering of chat/reply content is a
+                            // separate, unbuilt decision.
+                            <RichText body={msg.body} />
                           ) : (
                             <p className="whitespace-pre-wrap break-words">{msg.body}</p>
                           )}

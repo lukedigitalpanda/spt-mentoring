@@ -21,3 +21,14 @@
     background-clip: text;
   }
 }
+
+/* Backend-sanitised rich text (News articles, Mass message announcements).
+   Tailwind preflight strips list markers and link styling, so the tags
+   allowed through the backend's sanitiser whitelist need their look
+   restored here. See frontend/src/components/ui/RichText.tsx. */
+@layer components {
+  .rich-text ul { list-style: disc; padding-left: 1.25rem; margin: 0.5rem 0; }
+  .rich-text ol { list-style: decimal; padding-left: 1.25rem; margin: 0.5rem 0; }
+  .rich-text a { color: #e01e8c; text-decoration: underline; overflow-wrap: anywhere; }
+  .rich-text p { margin: 0.5rem 0; }
+}

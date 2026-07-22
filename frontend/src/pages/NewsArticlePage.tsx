@@ -2,6 +2,7 @@ import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import api from '../utils/api';
+import RichText from '../components/ui/RichText';
 import type { NewsItem } from '../types';
 
 function fmt(d?: string | null) {
@@ -94,9 +95,10 @@ export default function NewsArticlePage() {
 
       {/* Body */}
       {item.body && (
-        <div className="prose prose-sm max-w-none text-navy-500/80 leading-relaxed whitespace-pre-wrap break-words">
-          {item.body}
-        </div>
+        <RichText
+          body={item.body}
+          className="prose prose-sm max-w-none text-navy-500/80 leading-relaxed"
+        />
       )}
 
       {/* Footer */}

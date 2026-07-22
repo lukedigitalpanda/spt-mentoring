@@ -28,6 +28,17 @@ const composeBlockedText = (reason?: string, fallbackDetail?: string) =>
     ? `Your message could not be sent because ${reason}. Please edit it and try again.`
     : fallbackDetail || 'Your message could not be sent. Please try again.';
 
+// P3-1: day separators in the message list - "Today"/"Yesterday" for the
+// last two calendar days, otherwise a full weekday/date label.
+const dayLabel = (iso: string) => {
+  const d = new Date(iso);
+  const today = new Date();
+  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return 'Today';
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+};
+
 // P2-4: own messages stay editable while flagged/blocked (any time - the
 // sender needs to be able to fix and resubmit), and for a short window after
 // clean delivery. Attachment messages (body is just the filename) and
@@ -642,12 +653,22 @@ export default function MessagesPage() {
 
               {/* Messages */}
               <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-3">
-                {allMessages.map((msg) => {
+                {allMessages.map((msg, idx) => {
                   const isMine = msg.sender === user?.id;
                   const reported = reportedMessageIds.has(msg.id);
                   const editable = isMessageEditable(msg, isMine, selectedConvData?.conversation_type);
+                  const prevMsg = idx > 0 ? allMessages[idx - 1] : null;
+                  const showDaySeparator = !prevMsg || new Date(prevMsg.sent_at).toDateString() !== new Date(msg.sent_at).toDateString();
                   return (
-                    <div key={`${msg.id}-${msg.sent_at}`} className={`flex min-w-0 ${isMine ? 'justify-end' : 'justify-start'}`}>
+                    <React.Fragment key={`${msg.id}-${msg.sent_at}`}>
+                    {showDaySeparator && (
+                      <div className="flex justify-center">
+                        <span className="bg-purple-50 text-navy-500/50 text-[11px] rounded-full px-3 py-1">
+                          {dayLabel(msg.sent_at)}
+                        </span>
+                      </div>
+                    )}
+                    <div className={`flex min-w-0 ${isMine ? 'justify-end' : 'justify-start'}`}>
                       <div className="max-w-[80%] sm:max-w-sm min-w-0 group relative">
                         {!isMine && (
                           <p className="text-[11px] font-semibold text-purple-500 mb-1 ml-1">{msg.sender_name}</p>
@@ -690,7 +711,7 @@ export default function MessagesPage() {
                           )}
                         </div>
                         <div className={`flex items-center mt-1 gap-2 ${isMine ? 'justify-end' : 'justify-start'}`}>
-                          <p className="text-[10px] text-navy-500/30">
+                          <p className="text-[10px] text-navy-500/30" title={new Date(msg.sent_at).toLocaleString('en-GB')}>
                             {new Date(msg.sent_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                             {msg.edited_at && ' (edited)'}
                           </p>
@@ -728,6 +749,7 @@ export default function MessagesPage() {
                         </div>
                       </div>
                     </div>
+                    </React.Fragment>
                   );
                 })}
 

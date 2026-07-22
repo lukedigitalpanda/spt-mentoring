@@ -31,6 +31,7 @@ ROLE_CHOICES = [
 # TC-13: Standard engineering disciplines list for multi-select
 ENGINEERING_DISCIPLINE_CHOICES = [
     ('Aerospace', 'Aerospace'),
+    ('Astronautics', 'Astronautics'),
     ('Biomedical', 'Biomedical'),
     ('Chemical', 'Chemical'),
     ('Civil', 'Civil'),
@@ -223,7 +224,7 @@ class MentoringMatchAdmin(admin.ModelAdmin):
         from .models import User
 
         DISCIPLINES = [
-            'Aerospace', 'Biomedical', 'Chemical', 'Civil', 'Electrical',
+            'Aerospace', 'Astronautics', 'Biomedical', 'Chemical', 'Civil', 'Electrical',
             'Environmental', 'Materials', 'Mechanical', 'Software', 'Structural', 'Other',
         ]
 
@@ -304,7 +305,7 @@ class MentorProfileForm(forms.ModelForm):
     # admin-entered data is standardised and usable for matching queries.
     specialisms = forms.MultipleChoiceField(
         choices=[(d, d) for d in [
-            'Aerospace', 'Biomedical', 'Chemical', 'Civil', 'Electrical',
+            'Aerospace', 'Astronautics', 'Biomedical', 'Chemical', 'Civil', 'Electrical',
             'Environmental', 'Materials', 'Mechanical', 'Software', 'Structural', 'Other',
         ]],
         required=False,

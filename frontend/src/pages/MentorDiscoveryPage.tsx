@@ -36,8 +36,8 @@ interface MentorCard {
 }
 
 const DISCIPLINES = [
-  'Mechanical', 'Electrical', 'Civil', 'Chemical', 'Software',
-  'Aerospace', 'Biomedical', 'Environmental', 'Materials', 'Other',
+  'Aerospace', 'Astronautics', 'Biomedical', 'Chemical', 'Civil', 'Electrical',
+  'Environmental', 'Materials', 'Mechanical', 'Software', 'Structural', 'Other',
 ];
 
 // Derive avatar initials defensively. The list API may omit first_name/last_name,

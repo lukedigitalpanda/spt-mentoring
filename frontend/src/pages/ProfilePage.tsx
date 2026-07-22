@@ -65,7 +65,7 @@ function Field({ label, value, placeholder, editing, onChange, type = 'text', mu
 
 // TC-13: Standard engineering disciplines list
 const ENGINEERING_DISCIPLINES = [
-  'Aerospace', 'Biomedical', 'Chemical', 'Civil', 'Electrical',
+  'Aerospace', 'Astronautics', 'Biomedical', 'Chemical', 'Civil', 'Electrical',
   'Environmental', 'Materials', 'Mechanical', 'Software', 'Structural', 'Other',
 ];
 

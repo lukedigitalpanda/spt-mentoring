@@ -340,29 +340,37 @@ function PostList({
   const editPost = useMutation({
     mutationFn: ({ id, body: newBody }: { id: number; body: string }) =>
       api.patch(`/forums/posts/${id}/`, { body: newBody }),
-    onSuccess: (res, { id }) => {
+    onSuccess: async (res, { id }) => {
       const moderationStatus = (res?.data as { moderation_status?: string })?.moderation_status;
+      // A background refetch of this thread's posts (staleTime 30s +
+      // refetchOnWindowFocus in App.tsx) may already be in flight from before
+      // the PATCH was sent. If it resolves after our direct cache write below
+      // it would silently revert the row to its pre-edit body - cancel it
+      // first so it can't land, then invalidate so a fresh, post-edit fetch
+      // replaces whatever that cancelled request left behind.
+      await queryClient.cancelQueries({ queryKey: ['posts', thread.id] });
       if (moderationStatus === 'pending_review') {
         setPostNotice({
           type: 'flagged',
           text: 'Your edited post has been submitted and is awaiting review before it becomes visible again.',
         });
-        queryClient.invalidateQueries({ queryKey: ['posts', thread.id] });
       } else {
         setPostNotice(null);
         queryClient.setQueryData<PaginatedResponse<Post>>(['posts', thread.id], (old) =>
           old ? { ...old, results: old.results.map(p => (p.id === id ? (res.data as Post) : p)) } : old
         );
       }
+      queryClient.invalidateQueries({ queryKey: ['posts', thread.id] });
       setEditingPostId(null);
       setEditBody('');
     },
-    onError: (error: unknown) => {
+    onError: async (error: unknown) => {
       const axiosError = error as { response?: { status?: number; data?: { moderation_status?: string; detail?: string } } };
       const httpStatus = axiosError?.response?.status;
       const moderationStatus = axiosError?.response?.data?.moderation_status;
 
       if (httpStatus === 400 && moderationStatus === 'blocked') {
+        await queryClient.cancelQueries({ queryKey: ['posts', thread.id] });
         setPostNotice({
           type: 'blocked',
           text: 'Your edited post could not be saved as it contains restricted content.',

@@ -107,6 +107,9 @@ export default function MessagesPage() {
   // never touched while editing - cancelling simply drops back to it untouched.
   const [editingMsgId, setEditingMsgId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState('');
+  // In-flight guard for saveEditedMessage - mirrors the forum edit mutation's
+  // isPending gate, so a slow PATCH can't be double-submitted via Enter/Save.
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const autoGrow = () => {
     const el = taRef.current;
@@ -342,8 +345,16 @@ export default function MessagesPage() {
     if (!body || editingMsgId == null) return;
     const id = editingMsgId;
     setModerationNotice(null);
+    setIsSavingEdit(true);
     try {
       const resp = await api.patch(`/messaging/messages/${id}/`, { body });
+      // A background refetch of this conversation's history (staleTime 30s +
+      // refetchOnWindowFocus in App.tsx) may already be in flight from before
+      // the PATCH was sent. If it resolves after our direct cache write below
+      // it would silently revert the bubble to its pre-edit body - cancel it
+      // first so it can't land, then invalidate so a fresh, post-edit fetch
+      // replaces whatever that cancelled request left behind.
+      await qc.cancelQueries({ queryKey: ['messages', selectedConv] });
       if (resp.status === 202) {
         // Held for re-review - the edit was accepted, so leave editing mode
         // (mirrors a fresh flagged send) and let the envelope's serialised
@@ -356,16 +367,21 @@ export default function MessagesPage() {
         patchMessage(id, resp.data as Message);
         cancelEditingMessage();
       }
+      qc.invalidateQueries({ queryKey: ['messages', selectedConv] });
       qc.invalidateQueries({ queryKey: ['conversations'] });
     } catch (err: any) {
+      await qc.cancelQueries({ queryKey: ['messages', selectedConv] });
       const errData = err?.response?.data as { detail?: string; moderation_reason?: string; message?: Message } | undefined;
       setModerationNotice({
         type: 'blocked',
         text: composeBlockedText(errData?.moderation_reason, errData?.detail),
       });
       if (errData?.message) patchMessage(id, errData.message);
+      qc.invalidateQueries({ queryKey: ['messages', selectedConv] });
       // Stay in editing mode (mirrors a blocked fresh send keeping the draft)
       // so the sender can amend the offending text and resubmit.
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -810,7 +826,7 @@ export default function MessagesPage() {
                         if (e.key === 'Enter' && !e.shiftKey && !IS_COARSE_POINTER) {
                           e.preventDefault();
                           if (editingMsgId !== null) {
-                            saveEditedMessage();
+                            if (!isSavingEdit) saveEditedMessage();
                           } else {
                             sendMessage();
                           }
@@ -822,10 +838,10 @@ export default function MessagesPage() {
                     {editingMsgId !== null ? (
                       <button
                         onClick={saveEditedMessage}
-                        disabled={!editDraft.trim()}
+                        disabled={!editDraft.trim() || isSavingEdit}
                         className="flex-shrink-0 bg-gradient-brand-soft text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:opacity-90 disabled:opacity-40 transition-all shadow-brand flex items-center gap-1.5"
                       >
-                        Save
+                        {isSavingEdit ? 'Saving…' : 'Save'}
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                         </svg>

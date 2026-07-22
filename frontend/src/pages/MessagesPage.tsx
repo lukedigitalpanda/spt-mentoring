@@ -708,7 +708,7 @@ export default function MessagesPage() {
                               {msg.body}
                             </a>
                           ) : msg.is_broadcast ? (
-                            // is_broadcast (MessageSerializer.get_is_broadcast) is an
+                            // is_broadcast (MessageSerializer.is_broadcast model field) is an
                             // identity-based backend flag, not a position guess: true
                             // only for the system-authored MassMessage body, which is
                             // the only body of this shape the backend has run through

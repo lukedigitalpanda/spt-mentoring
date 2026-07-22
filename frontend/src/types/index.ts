@@ -94,7 +94,7 @@ export interface Message {
   status: 'pending' | 'delivered' | 'flagged' | 'blocked' | 'deleted';
   attachment: string | null;
   is_read: boolean;
-  // Backend-computed (MessageSerializer.get_is_broadcast): true only for the
+  // Backend-computed (MessageSerializer.is_broadcast model field): true only for the
   // system-authored MassMessage body in a mass_message conversation - the
   // only body of this type the backend has run through sanitise_rich_text().
   // Absent/undefined (e.g. a WS chat_message payload that doesn't carry it)

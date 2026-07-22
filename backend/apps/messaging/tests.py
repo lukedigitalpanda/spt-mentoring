@@ -300,6 +300,32 @@ class AbuseReportContentTests(TestCase):
         self.assertIn('to be deleted', admin_obj.reported_message_preview(report))
 
 
+class MessageWhitespaceTests(TestCase):
+    """Internal whitespace and newlines must survive storage and serialization (P1-2)."""
+
+    def setUp(self):
+        self.scholar = make_user('scholar-ws@example.com', role=User.Role.SCHOLAR)
+        self.mentor = make_user('mentor-ws@example.com', role=User.Role.MENTOR)
+        self.conv = Conversation.objects.create(
+            conversation_type=Conversation.ConversationType.DIRECT, subject='Test'
+        )
+        self.conv.participants.set([self.scholar, self.mentor])
+        self.client_api = APIClient()
+        self.client_api.force_authenticate(self.scholar)
+
+    def test_internal_whitespace_and_newlines_preserved(self):
+        body = 'def f():\n    return  1\n\n\ttabbed'
+        resp = self.client_api.post(
+            '/api/messaging/messages/', {'conversation': self.conv.pk, 'body': body},
+        )
+        self.assertEqual(resp.status_code, 201, resp.content)
+        msg = Message.objects.get(id=resp.data['id'])
+        self.assertEqual(msg.body, body)
+        list_resp = self.client_api.get(f'/api/messaging/messages/?conversation={self.conv.pk}')
+        bodies = [m['body'] for m in list_resp.data['results']]
+        self.assertIn(body, bodies)
+
+
 class AdminStartConversationTests(TestCase):
     """Admins can start a brand-new direct message to any user from the Django
     admin, sent as the Arkwright support account.

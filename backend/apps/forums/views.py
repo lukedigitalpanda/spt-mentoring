@@ -1,3 +1,6 @@
+import logging
+
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
@@ -6,7 +9,25 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Forum, Thread, Post
 from .serializers import ForumSerializer, ThreadSerializer, PostSerializer
-from apps.moderation.service import ModerationService
+from apps.moderation.service import ModerationResult, ModerationService
+
+logger = logging.getLogger('apps.forums')
+
+
+def _screen_post_body_safe(post):
+    """Run ModerationService.screen_text with the same pipeline-error
+    fail-safe as messaging's screen(): a screening exception must never 500
+    the request and strand the post in PENDING (invisible to everyone, the
+    author included). On error the post is HELD for admin review instead."""
+    try:
+        return ModerationService.screen_text(post.body)
+    except Exception:
+        logger.exception(
+            'Moderation pipeline error on forum post #%d - held for admin review', post.pk
+        )
+        return ModerationResult(
+            status='flagged', score=0, note='Pipeline error - held for admin review',
+        )
 
 
 def _alert_staff_for_post(post, triggered_term):
@@ -60,7 +81,7 @@ class ThreadViewSet(viewsets.ModelViewSet):
 
         # Run the same moderation pipeline as direct messages so the full term
         # list (profanity, slurs, contact details) applies to forum posts too.
-        result = ModerationService.screen_text(post.body)
+        result = _screen_post_body_safe(post)
         if result.status == 'blocked':
             post.status = Post.Status.HIDDEN
         elif result.status == 'flagged':
@@ -98,7 +119,6 @@ class PostViewSet(viewsets.ModelViewSet):
             # P2-4 (mirroring Task 5's messaging rule): authors see their own
             # held (flagged) and hidden (blocked) posts so they can fix and
             # resubmit them; everyone else only ever sees VISIBLE posts.
-            from django.db.models import Q
             qs = qs.filter(
                 Q(status=Post.Status.VISIBLE)
                 | Q(author=user, status__in=[Post.Status.FLAGGED, Post.Status.HIDDEN])
@@ -123,7 +143,7 @@ class PostViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         post = serializer.save(author=request.user, status=Post.Status.PENDING)
 
-        result = ModerationService.screen_text(post.body)
+        result = _screen_post_body_safe(post)
         return self._apply_moderation_outcome(post, result, serializer=serializer)
 
     def _apply_moderation_outcome(self, post, result, serializer=None):
@@ -201,5 +221,5 @@ class PostViewSet(viewsets.ModelViewSet):
         post.status = Post.Status.PENDING
         post.save(update_fields=['body', 'edited_at', 'status'])
 
-        result = ModerationService.screen_text(post.body)
+        result = _screen_post_body_safe(post)
         return self._apply_moderation_outcome(post, result)

@@ -337,3 +337,61 @@ class HeldPostVisibilityAndResubmitTests(TestCase):
             f'/api/forums/posts/{post.pk}/', {'body': 'Hijack attempt'}, format='json',
         )
         self.assertEqual(edit.status_code, 404, edit.content)
+
+
+class ModerationPipelineErrorTests(TestCase):
+    """A screening exception must never 500 the request and strand the post in
+    PENDING (invisible to everyone, the author included). Mirroring messaging's
+    screen() fail-safe, the post is HELD for admin review instead."""
+
+    def setUp(self):
+        ModerationService.invalidate_cache()
+        self.author = make_user('pipeline-author@example.com')
+        self.forum = Forum.objects.create(title='General', visibility=Forum.Visibility.OPEN)
+        self.thread = Thread.objects.create(forum=self.forum, title='Hello', created_by=self.author)
+        self.client_api = APIClient()
+        self.client_api.force_authenticate(self.author)
+
+    def tearDown(self):
+        ModerationService.invalidate_cache()
+
+    def _listing_ids(self):
+        resp = self.client_api.get(f'/api/forums/posts/?thread={self.thread.pk}')
+        data = resp.data['results'] if isinstance(resp.data, dict) and 'results' in resp.data else resp.data
+        return [p['id'] for p in data]
+
+    def test_edit_with_screening_error_holds_post_for_review(self):
+        from unittest.mock import patch
+        resp = self.client_api.post(
+            '/api/forums/posts/',
+            {'thread': self.thread.pk, 'body': 'A perfectly clean post.'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 201, resp.content)
+        post = Post.objects.get(pk=resp.data['id'])
+
+        with patch.object(ModerationService, 'screen_text', side_effect=RuntimeError('boom')):
+            edit = self.client_api.patch(
+                f'/api/forums/posts/{post.pk}/', {'body': 'An edited body.'}, format='json',
+            )
+        self.assertEqual(edit.status_code, 202, edit.content)
+        self.assertEqual(edit.data['moderation_status'], 'pending_review')
+        post.refresh_from_db()
+        self.assertEqual(post.status, Post.Status.FLAGGED)
+        self.assertEqual(post.moderation_note, 'Pipeline error - held for admin review')
+        # The author can still see (and later fix) the held post.
+        self.assertIn(post.pk, self._listing_ids())
+
+    def test_create_with_screening_error_holds_post_for_review(self):
+        from unittest.mock import patch
+        with patch.object(ModerationService, 'screen_text', side_effect=RuntimeError('boom')):
+            resp = self.client_api.post(
+                '/api/forums/posts/',
+                {'thread': self.thread.pk, 'body': 'A brand new post.'},
+                format='json',
+            )
+        self.assertEqual(resp.status_code, 202, resp.content)
+        post = Post.objects.latest('created_at')
+        self.assertEqual(post.status, Post.Status.FLAGGED)
+        self.assertEqual(post.moderation_note, 'Pipeline error - held for admin review')
+        self.assertIn(post.pk, self._listing_ids())

@@ -232,14 +232,21 @@ class UserViewSet(viewsets.ModelViewSet):
 
 class MentoringMatchViewSet(viewsets.ModelViewSet):
     """Manage mentor-scholar matches. Supports one mentor with multiple scholars."""
-    queryset = MentoringMatch.objects.select_related('scholar', 'mentor').order_by('-matched_on')
     serializer_class = MentoringMatchSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['scholar', 'mentor', 'is_active']
     search_fields = ['scholar__first_name', 'scholar__last_name', 'mentor__first_name', 'mentor__last_name']
 
+    def get_queryset(self):
+        user = self.request.user
+        qs = MentoringMatch.objects.select_related('scholar', 'mentor').order_by('-matched_on')
+        if user.is_staff or user.role == 'admin':
+            return qs
+        from django.db.models import Q
+        return qs.filter(Q(mentor=user) | Q(scholar=user))
+
     def get_permissions(self):
-        if self.action in ('create', 'destroy', 'update'):
+        if self.action in ('create', 'destroy', 'update', 'partial_update'):
             return [IsAdminUser()]
         return [IsAuthenticated()]
 

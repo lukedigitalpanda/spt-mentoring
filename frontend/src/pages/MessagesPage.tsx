@@ -707,16 +707,22 @@ export default function MessagesPage() {
                               </svg>
                               {msg.body}
                             </a>
-                          ) : selectedConvData?.conversation_type === 'mass_message' && idx === 0 ? (
-                            // Only the announcement itself (always the oldest/first
-                            // message - send_mass_message_task creates it synchronously
-                            // before any reply can exist, and messages are ordered
-                            // oldest-first) is a backend-sanitised MassMessage body.
-                            // Replies into this same conversation (when replies_enabled)
-                            // are ordinary, UNsanitised chat messages - idx === 0 keeps
-                            // those on the plain-text path below, same as regular
-                            // chat bubbles. Rich rendering of chat/reply content is a
-                            // separate, unbuilt decision.
+                          ) : msg.is_broadcast ? (
+                            // is_broadcast (MessageSerializer.get_is_broadcast) is an
+                            // identity-based backend flag, not a position guess: true
+                            // only for the system-authored MassMessage body, which is
+                            // the only body of this shape the backend has run through
+                            // sanitise_rich_text(). Deliberately NOT keyed off
+                            // conversation_type/index - a reply loaded via a WS race
+                            // before REST history resolves, or a second human
+                            // participant in the thread, would otherwise land at
+                            // "index 0" and render unsanitised text as HTML. Replies
+                            // (including from Arkwright via the admin reply panel) are
+                            // ordinary chat messages and stay on the plain-text path
+                            // below. WS chat_message events never carry is_broadcast,
+                            // which defaults to undefined/falsy there - safe, because a
+                            // broadcast message is only ever created server-side and
+                            // only ever reaches the frontend via the REST history load.
                             <RichText body={msg.body} />
                           ) : (
                             <p className="whitespace-pre-wrap break-words">{msg.body}</p>

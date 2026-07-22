@@ -935,3 +935,89 @@ class MessageEditTests(TestCase):
         self.assertEqual(delete.status_code, 405, delete.content)
         msg = Message.objects.get(pk=msg_id)
         self.assertEqual(msg.body, 'Original clean message.')
+
+
+class MessageIsBroadcastSerialisationTests(TestCase):
+    """Task 25 hardening: the frontend decides whether a message body is
+    trusted, backend-sanitised HTML (safe to render via
+    dangerouslySetInnerHTML) purely from MessageSerializer.is_broadcast.
+    That flag must be true ONLY for the system-authored broadcast Message
+    send_mass_message_task() creates, and false for every reply into that
+    same conversation - even one from Arkwright itself - since replies are
+    ordinary, unsanitised chat messages. Getting this wrong (e.g. keying
+    off conversation_type or message position instead of sender identity)
+    would let unsanitised user text render as HTML."""
+
+    def setUp(self):
+        self.scholar = make_user('broadcast-scholar@example.com', role=User.Role.SCHOLAR)
+        self.arkwright = make_user(
+            'arkwright@spt.org', role=User.Role.ADMIN, is_staff=True,
+        )
+        self.conv = Conversation.objects.create(
+            conversation_type=Conversation.ConversationType.MASS_MESSAGE,
+            subject='Broadcast', replies_enabled=True,
+        )
+        self.conv.participants.set([self.arkwright, self.scholar])
+        self.client_api = APIClient()
+        self.client_api.force_authenticate(self.scholar)
+
+    def test_broadcast_message_serialises_is_broadcast_true(self):
+        broadcast = Message.objects.create(
+            conversation=self.conv, sender=self.arkwright,
+            body='<p>Welcome to the programme.</p>', status=Message.Status.DELIVERED,
+        )
+        resp = self.client_api.get(f'/api/messaging/messages/?conversation={self.conv.pk}')
+        self.assertEqual(resp.status_code, 200, resp.content)
+        row = next(m for m in resp.data['results'] if m['id'] == broadcast.pk)
+        self.assertTrue(row['is_broadcast'])
+
+    def test_reply_in_same_thread_serialises_is_broadcast_false(self):
+        Message.objects.create(
+            conversation=self.conv, sender=self.arkwright,
+            body='<p>Welcome to the programme.</p>', status=Message.Status.DELIVERED,
+        )
+        reply = Message.objects.create(
+            conversation=self.conv, sender=self.scholar,
+            body='Thanks, will do!', status=Message.Status.DELIVERED,
+        )
+        resp = self.client_api.get(f'/api/messaging/messages/?conversation={self.conv.pk}')
+        self.assertEqual(resp.status_code, 200, resp.content)
+        row = next(m for m in resp.data['results'] if m['id'] == reply.pk)
+        self.assertFalse(row['is_broadcast'])
+
+    def test_arkwright_reply_in_same_thread_is_a_documented_residual(self):
+        # Known accepted trade-off (see MessageSerializer.get_is_broadcast):
+        # is_broadcast keys off sender identity + conversation_type, not
+        # message position, so a free-typed reply FROM Arkwright (e.g. via
+        # the admin reply panel) into the same mass_message conversation
+        # also serialises True even though it was never run through
+        # sanitise_rich_text(). This is deliberately NOT a security
+        # regression versus the position-based approach it replaces - the
+        # only actor who can trigger it is an admin operating as
+        # Arkwright, not an arbitrary recipient - but it is a real residual
+        # this test pins so it cannot silently change unnoticed.
+        Message.objects.create(
+            conversation=self.conv, sender=self.arkwright,
+            body='<p>Welcome to the programme.</p>', status=Message.Status.DELIVERED,
+        )
+        arkwright_reply = Message.objects.create(
+            conversation=self.conv, sender=self.arkwright,
+            body='Following up <b>directly</b>', status=Message.Status.DELIVERED,
+        )
+        resp = self.client_api.get(f'/api/messaging/messages/?conversation={self.conv.pk}')
+        self.assertEqual(resp.status_code, 200, resp.content)
+        rows = [m for m in resp.data['results'] if m['id'] == arkwright_reply.pk]
+        self.assertEqual(len(rows), 1)
+        self.assertTrue(rows[0]['is_broadcast'])
+
+    def test_message_in_direct_conversation_is_never_broadcast(self):
+        direct_conv = Conversation.objects.create(conversation_type=Conversation.ConversationType.DIRECT)
+        direct_conv.participants.set([self.arkwright, self.scholar])
+        msg = Message.objects.create(
+            conversation=direct_conv, sender=self.arkwright,
+            body='Hello there.', status=Message.Status.DELIVERED,
+        )
+        resp = self.client_api.get(f'/api/messaging/messages/?conversation={direct_conv.pk}')
+        self.assertEqual(resp.status_code, 200, resp.content)
+        row = next(m for m in resp.data['results'] if m['id'] == msg.pk)
+        self.assertFalse(row['is_broadcast'])

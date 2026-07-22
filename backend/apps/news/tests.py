@@ -7,7 +7,7 @@ form that calls it.
 """
 from django.test import TestCase
 
-from .sanitiser import sanitise_rich_text
+from .sanitiser import is_rich_text, sanitise_rich_text
 
 
 class SanitiseRichTextTests(TestCase):
@@ -84,6 +84,39 @@ class SanitiseRichTextTests(TestCase):
         self.assertIn('<u>underlined</u>', result)
 
 
+class IsRichTextTests(TestCase):
+    """is_rich_text() is the single canonical "does this body contain
+    markup" test shared by model save(), admin clean_body() and the
+    mass-message email task - pinning its behaviour here covers all of
+    them at once."""
+
+    def test_plain_text_is_not_rich(self):
+        self.assertFalse(is_rich_text('Just plain text, no markup at all.'))
+
+    def test_ampersand_alone_is_not_rich(self):
+        self.assertFalse(is_rich_text('Q&A session'))
+
+    def test_bare_less_than_alone_is_not_rich(self):
+        self.assertFalse(is_rich_text('<18 years old'))
+
+    def test_empty_and_none_are_not_rich(self):
+        self.assertFalse(is_rich_text(''))
+        self.assertFalse(is_rich_text(None))
+
+    def test_real_tag_is_rich(self):
+        self.assertTrue(is_rich_text('<p>Hello</p>'))
+        self.assertTrue(is_rich_text('plain lead-in <script>alert(1)</script>'))
+
+    def test_prose_that_looks_like_a_tag_is_treated_as_rich(self):
+        # Accepted edge case (safety-first, deliberate): text that merely
+        # *resembles* a tag - "<a and b>" reads as an <a ...> opening tag
+        # to the regex - is classified as rich and will be run through the
+        # sanitiser. This is the safety-first direction: false positives
+        # here cost a little unnecessary sanitisation of odd prose; false
+        # negatives would let real markup slip through unsanitised.
+        self.assertTrue(is_rich_text('see <a and b> options'))
+
+
 class NewsItemBodySanitisedOnSaveTests(TestCase):
     """Task 24 hardening: NewsItemViewSet (REST API) writes body without
     going through the admin form's clean_body(), so the gate must also live
@@ -121,3 +154,54 @@ class NewsItemBodySanitisedOnSaveTests(TestCase):
         )
         item.refresh_from_db()
         self.assertEqual(item.body, '')
+
+    def test_ampersand_in_plain_body_is_stored_byte_identical(self):
+        # Regression: nh3 HTML-escapes bare '&' even in tag-free input, so
+        # running every body through sanitise_rich_text() unconditionally
+        # turned "Q&A session" into "Q&amp;A session" on save. Gating on
+        # is_rich_text() keeps genuinely plain text untouched.
+        from .models import NewsItem
+        item = NewsItem.objects.create(
+            title='Q&A article',
+            slug='test-article-orm-ampersand',
+            body='Join our Q&A session this Friday.',
+        )
+        item.refresh_from_db()
+        self.assertEqual(item.body, 'Join our Q&A session this Friday.')
+
+    def test_bare_less_than_in_plain_body_is_stored_byte_identical(self):
+        from .models import NewsItem
+        item = NewsItem.objects.create(
+            title='Age restriction article',
+            slug='test-article-orm-lessthan',
+            body='<18 years old? Ask a parent to help you sign up.',
+        )
+        item.refresh_from_db()
+        self.assertEqual(item.body, '<18 years old? Ask a parent to help you sign up.')
+
+
+class NewsItemAdminFormCleanBodyTests(TestCase):
+    """Task 24 hardening: the admin form's clean_body() must apply the same
+    is_rich_text() gate as the model save() - plain text must survive the
+    form's cleaning step byte-identical, not just the eventual save()."""
+
+    def _clean_body(self, body):
+        # NewsItemAdminForm requires other model fields too, but we only
+        # care about what clean_body() does to `body` here - other field
+        # errors don't stop is_valid() from running _clean_fields(), which
+        # is what populates cleaned_data['body'] via clean_body().
+        from .admin import NewsItemAdminForm
+        form = NewsItemAdminForm(data={'body': body})
+        form.is_valid()
+        return form.cleaned_data['body']
+
+    def test_ampersand_in_plain_body_unchanged_through_form_clean(self):
+        self.assertEqual(self._clean_body('Q&A session'), 'Q&A session')
+
+    def test_bare_less_than_in_plain_body_unchanged_through_form_clean(self):
+        self.assertEqual(self._clean_body('<18 years old'), '<18 years old')
+
+    def test_script_body_is_still_stripped_through_form_clean(self):
+        result = self._clean_body('<p>Hello</p><script>alert(1)</script>')
+        self.assertNotIn('<script', result)
+        self.assertNotIn('alert(1)', result)

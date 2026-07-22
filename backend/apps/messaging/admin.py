@@ -4,7 +4,7 @@ from django.utils.html import format_html
 from import_export.admin import ExportMixin
 from import_export import resources, fields
 from tinymce.widgets import TinyMCE
-from apps.news.sanitiser import sanitise_rich_text
+from apps.news.sanitiser import is_rich_text, sanitise_rich_text
 from .models import Conversation, Message, MassMessage, AbuseReport
 
 
@@ -756,7 +756,12 @@ class MassMessageAdminForm(forms.ModelForm):
         return list(self.cleaned_data.get('recipient_roles') or [])
 
     def clean_body(self):
-        return sanitise_rich_text(self.cleaned_data.get('body'))
+        # Only sanitise when the body actually looks like HTML - see
+        # is_rich_text()'s docstring: running plain text through the
+        # sanitiser HTML-escapes bare &/</> characters, mangling ordinary
+        # text like "Q&A session".
+        body = self.cleaned_data.get('body')
+        return sanitise_rich_text(body) if is_rich_text(body) else body
 
 
 @admin.register(MassMessage)

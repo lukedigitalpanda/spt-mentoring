@@ -2,7 +2,7 @@ from django import forms
 from django.contrib import admin
 from tinymce.widgets import TinyMCE
 from .models import NewsItem, PromotionalBanner
-from .sanitiser import sanitise_rich_text
+from .sanitiser import is_rich_text, sanitise_rich_text
 
 NEWS_AUDIENCE_CHOICES = [
     ('scholar', 'Scholars'),
@@ -36,7 +36,12 @@ class NewsItemAdminForm(forms.ModelForm):
         return list(self.cleaned_data.get('audience_list') or [])
 
     def clean_body(self):
-        return sanitise_rich_text(self.cleaned_data.get('body'))
+        # Only sanitise when the body actually looks like HTML - see
+        # is_rich_text()'s docstring: running plain text through the
+        # sanitiser HTML-escapes bare &/</> characters, mangling ordinary
+        # text like "Q&A session".
+        body = self.cleaned_data.get('body')
+        return sanitise_rich_text(body) if is_rich_text(body) else body
 
 
 @admin.register(NewsItem)

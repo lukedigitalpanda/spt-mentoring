@@ -2,9 +2,10 @@
 from celery import shared_task
 import html
 import logging
-import re
 
 from django.utils.html import strip_tags
+
+from apps.news.sanitiser import is_rich_text
 
 logger = logging.getLogger(__name__)
 
@@ -15,10 +16,10 @@ MATCH_EMAIL_SUBJECT = 'SPT Mentoring - You have been matched'
 # Task 24/25: a MassMessage.body written via the plain AdminPage textarea
 # (rather than the TinyMCE admin editor) is inert plain text and should be
 # sent as a plain email, not wrapped as an "HTML" message with no markup.
-# This matches the tag-sniffing the frontend uses (Task 25) to decide
-# whether to render a body as HTML or as plain text, so both ends agree on
-# what counts as "rich".
-HTML_RE = re.compile(r'<([a-z]+)(\s[^>]*)?>', re.I)
+# is_rich_text() (apps.news.sanitiser) is the ONE canonical "is this body
+# HTML" test shared by model save(), admin clean_body() and this task -
+# Task 25's frontend body renderer must mirror the same rule
+# (HTML_TAG_RE in that module) so all three agree on what counts as "rich".
 
 
 def build_no_contact_body(first_name, partner_name, partner_role):
@@ -143,7 +144,7 @@ def send_mass_message_task(mass_message_id):
         # Email (only if user has email notifications enabled)
         if recipient.notification_email and recipient.email:
             try:
-                is_rich = bool(HTML_RE.search(msg.body or ''))
+                is_rich = is_rich_text(msg.body)
                 plain_body = html.unescape(strip_tags(msg.body)) if is_rich else msg.body
                 send_mail(
                     subject=msg.subject,

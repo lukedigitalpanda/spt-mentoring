@@ -5,7 +5,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from simple_history.models import HistoricalRecords
 
-from .sanitiser import sanitise_rich_text
+from .sanitiser import is_rich_text, sanitise_rich_text
 
 
 class NewsItem(models.Model):
@@ -57,7 +57,12 @@ class NewsItem(models.Model):
         # but body can also be written via the REST API (NewsItemViewSet)
         # which does not route through that form - sanitise here too so no
         # write path can persist unsanitised HTML.
-        self.body = sanitise_rich_text(self.body)
+        # Only run the HTML sanitiser when the body actually looks like
+        # HTML (is_rich_text) - nh3 HTML-escapes bare &/</> even in tag-free
+        # input, which would otherwise mangle ordinary plain text such as
+        # "Q&A session" into "Q&amp;A session" on every save.
+        if is_rich_text(self.body):
+            self.body = sanitise_rich_text(self.body)
         super().save(*args, **kwargs)
 
     def __str__(self):

@@ -94,6 +94,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
     async def chat_message(self, event):
         await self.send(text_data=json.dumps(event))
 
+    async def message_edited(self, event):
+        """P2-4: relay message-edit broadcasts so open threads replace the
+        edited bubble body rather than appending a new message."""
+        await self.send(text_data=json.dumps(event))
+
     @database_sync_to_async
     def _is_match_blocked(self, user, conversation_id):
         """Return True if the user should be blocked from sending to this conversation.

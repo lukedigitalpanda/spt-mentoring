@@ -10,8 +10,8 @@ class PostSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Post
-        fields = ['id', 'thread', 'author', 'author_name', 'body', 'created_at', 'updated_at', 'status', 'attachment']
-        read_only_fields = ['author', 'status', 'created_at', 'updated_at']
+        fields = ['id', 'thread', 'author', 'author_name', 'body', 'created_at', 'updated_at', 'edited_at', 'status', 'attachment']
+        read_only_fields = ['author', 'status', 'created_at', 'updated_at', 'edited_at']
 
 
 class ThreadSerializer(serializers.ModelSerializer):

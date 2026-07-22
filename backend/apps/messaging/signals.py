@@ -23,6 +23,16 @@ def notify_recipients_on_delivered_message(sender, instance, created, **kwargs):
     if instance.status != 'delivered':
         return
 
+    # P2-4 edit guard: when a sender edits a message, partial_update() sets
+    # _was_held on the instance before re-screening.  A clean edit of an
+    # already-delivered message (_was_held False) must NOT re-notify the
+    # recipients; an edit that RELEASES a previously flagged/blocked message
+    # (_was_held True) notifies them for the first time.  The attribute is
+    # absent outside the edit flow (normal sends, admin approve() releases),
+    # so the default True leaves those paths untouched.
+    if instance.edited_at is not None and not getattr(instance, '_was_held', True):
+        return
+
     from apps.notifications.models import Notification
 
     is_mass_message = (

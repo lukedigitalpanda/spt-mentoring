@@ -1,3 +1,4 @@
+from django.utils import timezone
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -80,6 +81,15 @@ class PostViewSet(viewsets.ModelViewSet):
     serializer_class = PostSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['thread', 'status']
+    # P2-4: PUT is not supported - edits go through PATCH (partial_update
+    # below) so they are always re-moderated. DELETE stays admin-only, see
+    # get_permissions (mirroring ThreadViewSet's convention).
+    http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
+
+    def get_permissions(self):
+        if self.action == 'destroy':
+            return [IsAdminUser()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         user = self.request.user
@@ -107,7 +117,16 @@ class PostViewSet(viewsets.ModelViewSet):
         post = serializer.save(author=request.user, status=Post.Status.PENDING)
 
         result = ModerationService.screen_text(post.body)
+        return self._apply_moderation_outcome(post, result, serializer=serializer)
 
+    def _apply_moderation_outcome(self, post, result, serializer=None):
+        """Shared moderation status mapping + response envelopes for create()
+        and partial_update().
+
+        Applies the screening outcome to the post (HIDDEN / FLAGGED / VISIBLE)
+        and returns the matching Response: 400 blocked, 202 held for review,
+        or - when the post is visible - 201 with headers (create, serializer
+        given) / 200 (edit)."""
         if result.status == 'blocked':
             post.status = Post.Status.HIDDEN
             post.moderation_note = result.note
@@ -143,5 +162,37 @@ class PostViewSet(viewsets.ModelViewSet):
         post.status = Post.Status.VISIBLE
         post.moderation_note = result.note
         post.save(update_fields=['status', 'moderation_note'])
-        headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        if serializer is not None:
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        return Response(self.get_serializer(post).data, status=status.HTTP_200_OK)
+
+    def partial_update(self, request, *args, **kwargs):
+        """P2-4: author-or-staff post editing with mandatory re-moderation.
+
+        Every edit resets the post to PENDING, sets edited_at (the reliable
+        "edited" marker - updated_at also moves on moderation status flips)
+        and re-runs the same screening pipeline as create()."""
+        post = self.get_object()
+        user = request.user
+
+        if post.author_id != user.id and not (user.is_staff or user.role == 'admin'):
+            return Response(
+                {'detail': 'You can only edit your own posts.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        body = request.data.get('body') or ''
+        if not isinstance(body, str) or not body.strip():
+            return Response(
+                {'detail': 'Post body cannot be empty.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        post.body = body.strip()
+        post.edited_at = timezone.now()
+        post.status = Post.Status.PENDING
+        post.save(update_fields=['body', 'edited_at', 'status'])
+
+        result = ModerationService.screen_text(post.body)
+        return self._apply_moderation_outcome(post, result)

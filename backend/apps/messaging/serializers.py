@@ -12,9 +12,9 @@ class MessageSerializer(serializers.ModelSerializer):
         model = Message
         fields = [
             'id', 'conversation', 'sender', 'sender_name', 'body',
-            'sent_at', 'status', 'attachment', 'attachment_name', 'is_read',
+            'sent_at', 'edited_at', 'status', 'attachment', 'attachment_name', 'is_read',
         ]
-        read_only_fields = ['sent_at', 'status', 'sender']
+        read_only_fields = ['sent_at', 'edited_at', 'status', 'sender']
 
     def get_is_read(self, obj):
         request = self.context.get('request')

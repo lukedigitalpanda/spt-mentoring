@@ -104,6 +104,10 @@ class Post(models.Model):
     body = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # Set only when the author (or staff) edits the post body (Task 13).
+    # Unlike updated_at (auto_now), it does NOT change on moderation status
+    # flips, so it is the reliable "edited" marker for the UI.
+    edited_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     moderation_note = models.TextField(blank=True)
     moderated_by = models.ForeignKey(

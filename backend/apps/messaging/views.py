@@ -1,4 +1,6 @@
 import csv
+from datetime import timedelta
+
 from django.db.models import Max, Q
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
@@ -11,6 +13,10 @@ from .serializers import (
     ConversationSerializer, MessageSerializer, MassMessageSerializer, AbuseReportSerializer
 )
 from apps.moderation.service import ModerationService
+
+# P2-4: delivered messages may only be edited for a short window after
+# sending; held (flagged/blocked) messages remain editable at any time.
+MESSAGE_EDIT_WINDOW = timedelta(minutes=15)
 
 
 class ConversationViewSet(viewsets.ModelViewSet):
@@ -225,6 +231,9 @@ class MessageViewSet(viewsets.ModelViewSet):
     serializer_class = MessageSerializer
     filter_backends = [filters.OrderingFilter]
     ordering = ['sent_at']
+    # P2-4: PUT and DELETE are not part of the messaging API. Edits go through
+    # PATCH (partial_update below) so they are always re-moderated.
+    http_method_names = ['get', 'post', 'patch', 'head', 'options']
 
     def get_queryset(self):
         user = self.request.user
@@ -331,36 +340,9 @@ class MessageViewSet(viewsets.ModelViewSet):
         result = ModerationService.screen(message)
         MessageRead.objects.create(message=message, user=request.user)
 
-        if result.status == 'blocked':
-            reason = ModerationService.sender_facing_reason(result)
-            return Response(
-                {
-                    'detail': (
-                        f'Your message could not be sent because {reason}. '
-                        'Please edit it and try again.'
-                    ),
-                    'moderation_status': 'blocked',
-                    'moderation_reason': reason,
-                    'message': self.get_serializer(message).data,
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if result.status == 'flagged':
-            reason = ModerationService.sender_facing_reason(result)
-            return Response(
-                {
-                    'detail': (
-                        f'Your message has been held for review before delivery because {reason}. '
-                        'A moderator will review it shortly and you will be notified of the outcome. '
-                        'You can edit the message to remove the highlighted issue and resend it.'
-                    ),
-                    'moderation_status': 'pending_review',
-                    'moderation_reason': reason,
-                    'message': self.get_serializer(message).data,
-                },
-                status=status.HTTP_202_ACCEPTED,
-            )
+        hold_response = self._moderation_hold_response(message, result)
+        if hold_response is not None:
+            return hold_response
 
         # Mirror the WebSocket consumer: broadcast delivered messages to the
         # conversation group so recipients with the thread open see REST-created
@@ -392,6 +374,137 @@ class MessageViewSet(viewsets.ModelViewSet):
 
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def _moderation_hold_response(self, message, result):
+        """Shared moderation outcome envelopes for create() and partial_update().
+
+        Returns the 400 (blocked) or 202 (flagged / held for review) Response,
+        or None when the message was delivered so the caller can run its own
+        delivered branch (broadcast + success response).
+        """
+        if result.status == 'blocked':
+            reason = ModerationService.sender_facing_reason(result)
+            return Response(
+                {
+                    'detail': (
+                        f'Your message could not be sent because {reason}. '
+                        'Please edit it and try again.'
+                    ),
+                    'moderation_status': 'blocked',
+                    'moderation_reason': reason,
+                    'message': self.get_serializer(message).data,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if result.status == 'flagged':
+            reason = ModerationService.sender_facing_reason(result)
+            return Response(
+                {
+                    'detail': (
+                        f'Your message has been held for review before delivery because {reason}. '
+                        'A moderator will review it shortly and you will be notified of the outcome. '
+                        'You can edit the message to remove the highlighted issue and resend it.'
+                    ),
+                    'moderation_status': 'pending_review',
+                    'moderation_reason': reason,
+                    'message': self.get_serializer(message).data,
+                },
+                status=status.HTTP_202_ACCEPTED,
+            )
+
+        return None
+
+    def partial_update(self, request, *args, **kwargs):
+        """P2-4: sender-only message editing with mandatory re-moderation.
+
+        Rules:
+          - only the sender may edit, and never in a mass-message broadcast
+          - own flagged/blocked messages are editable at any time
+          - delivered messages are editable within MESSAGE_EDIT_WINDOW of sending
+          - pending/deleted messages are not editable
+          - every edit resets status to PENDING and re-runs the moderation
+            pipeline; outcomes use the same envelopes as create()
+
+        HistoricalRecords on Message is the audit trail: both the edit save and
+        the re-screen save write history rows.
+        """
+        message = self.get_object()
+
+        if message.sender_id != request.user.id:
+            return Response(
+                {'detail': 'You can only edit your own messages.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if message.conversation.conversation_type == Conversation.ConversationType.MASS_MESSAGE:
+            return Response(
+                {'detail': 'Broadcast messages cannot be edited.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if message.status not in (
+            Message.Status.DELIVERED, Message.Status.FLAGGED, Message.Status.BLOCKED
+        ):
+            return Response(
+                {'detail': 'This message cannot be edited.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if (
+            message.status == Message.Status.DELIVERED
+            and timezone.now() - message.sent_at > MESSAGE_EDIT_WINDOW
+        ):
+            return Response(
+                {'detail': 'Messages can only be edited within 15 minutes of sending.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        body = request.data.get('body') or ''
+        if not isinstance(body, str) or not body.strip():
+            return Response(
+                {'detail': 'Message body cannot be empty.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        old_status = message.status
+        message.body = body.strip()
+        message.edited_at = timezone.now()
+        message.status = Message.Status.PENDING
+        message.save(update_fields=['body', 'edited_at', 'status'])
+
+        # Signal guard (see signals.notify_recipients_on_delivered_message):
+        # recipients are only re-notified when this edit RELEASES a previously
+        # held/blocked message; a clean edit of an already-delivered message
+        # must not duplicate their notifications.
+        message._was_held = old_status != Message.Status.DELIVERED
+        result = ModerationService.screen(message)
+
+        hold_response = self._moderation_hold_response(message, result)
+        if hold_response is not None:
+            return hold_response
+
+        # Delivered edit: broadcast a message_edited event so open threads
+        # replace the bubble body rather than appending a new one. Never let
+        # a broadcast failure break the edit itself.
+        try:
+            from asgiref.sync import async_to_sync
+            from channels.layers import get_channel_layer
+            channel_layer = get_channel_layer()
+            if channel_layer is not None:
+                async_to_sync(channel_layer.group_send)(
+                    f'chat_{message.conversation_id}',
+                    {
+                        'type': 'message_edited',
+                        'message_id': message.pk,
+                        'body': message.body,
+                        'edited_at': message.edited_at.isoformat(),
+                    },
+                )
+        except Exception:
+            import logging
+            logging.getLogger('apps.messaging').exception(
+                'Failed to broadcast edit of message #%d', message.pk
+            )
+
+        return Response(self.get_serializer(message).data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'])
     def mark_read(self, request, pk=None):

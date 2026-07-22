@@ -550,3 +550,258 @@ class NoContactReminderEmailTests(TestCase):
         self.assertIn('Sam Scholar', mentor_email.body)
         self.assertIn('scholar', mentor_email.body)
         self.assertIn(f'{settings.FRONTEND_URL}/messages', mentor_email.body)
+
+
+class MessageEditTests(TestCase):
+    """Task 13 (P2-4): senders can edit their own messages, edits are always
+    re-moderated, and the previously unmoderated PATCH/PUT/DELETE holes are
+    closed. HistoricalRecords on Message is the audit trail for edits."""
+
+    def setUp(self):
+        from apps.moderation.service import ModerationService
+        from apps.moderation.models import ModerationTerm
+        ModerationService.invalidate_cache()
+        ModerationTerm.objects.create(
+            term='murder', match_type=ModerationTerm.MatchType.SUBSTRING,
+            severity=ModerationTerm.Severity.CRITICAL, source='bulk_import_v1', is_active=True,
+        )
+        ModerationService.invalidate_cache()
+        self.scholar = make_user('scholar-edit@example.com', role=User.Role.SCHOLAR)
+        self.mentor = make_user('mentor-edit@example.com', role=User.Role.MENTOR)
+        self.conv = Conversation.objects.create(
+            conversation_type=Conversation.ConversationType.DIRECT, subject='Edit tests'
+        )
+        self.conv.participants.set([self.scholar, self.mentor])
+        self.client_api = APIClient()
+        self.client_api.force_authenticate(self.scholar)
+
+    def tearDown(self):
+        from apps.moderation.service import ModerationService
+        ModerationService.invalidate_cache()
+
+    def _send(self, body):
+        return self.client_api.post(
+            '/api/messaging/messages/', {'conversation': self.conv.pk, 'body': body},
+        )
+
+    def _patch(self, message_id, body, client=None):
+        return (client or self.client_api).patch(
+            f'/api/messaging/messages/{message_id}/', {'body': body},
+        )
+
+    def _mentor_message_notifications(self):
+        from apps.notifications.models import Notification
+        return Notification.objects.filter(
+            user=self.mentor, notification_type=Notification.Type.MESSAGE,
+        )
+
+    def test_sender_edits_own_delivered_message_within_window(self):
+        resp = self._send('Original clean message, see you soon.')
+        self.assertEqual(resp.status_code, 201, resp.content)
+        msg = Message.objects.get(pk=resp.data['id'])
+        history_before = msg.history.count()
+
+        edit = self._patch(msg.pk, 'Actually let us meet on Friday instead.')
+        self.assertEqual(edit.status_code, 200, edit.content)
+        self.assertEqual(edit.data['body'], 'Actually let us meet on Friday instead.')
+        self.assertIsNotNone(edit.data['edited_at'])
+
+        msg.refresh_from_db()
+        self.assertEqual(msg.body, 'Actually let us meet on Friday instead.')
+        self.assertEqual(msg.status, Message.Status.DELIVERED)
+        self.assertIsNotNone(msg.edited_at)
+        # HistoricalRecords is the audit trail - history must grow on edit.
+        self.assertGreater(msg.history.count(), history_before)
+
+    def test_edit_to_blocked_term_returns_blocked_envelope(self):
+        resp = self._send('Original clean message.')
+        self.assertEqual(resp.status_code, 201, resp.content)
+        msg_id = resp.data['id']
+
+        edit = self._patch(msg_id, 'I want to murder someone')
+        self.assertEqual(edit.status_code, 400, edit.content)
+        self.assertEqual(edit.data['moderation_status'], 'blocked')
+        self.assertIn('moderation_reason', edit.data)
+        msg = Message.objects.get(pk=msg_id)
+        self.assertEqual(msg.status, Message.Status.BLOCKED)
+        self.assertIsNotNone(msg.edited_at)
+
+        # Own blocked message stays editable - a clean re-edit releases it.
+        notifications_before = self._mentor_message_notifications().count()
+        reedit = self._patch(msg_id, 'Sorry about that, back to the clean version.')
+        self.assertEqual(reedit.status_code, 200, reedit.content)
+        msg.refresh_from_db()
+        self.assertEqual(msg.status, Message.Status.DELIVERED)
+        # Releasing a blocked message notifies the recipient (once).
+        self.assertEqual(
+            self._mentor_message_notifications().count(), notifications_before + 1
+        )
+
+    def test_flagged_message_edited_to_clean_is_delivered_and_notifies_once(self):
+        resp = self._send('reach me at jordan@example.com')
+        self.assertEqual(resp.status_code, 202, resp.content)
+        msg_id = resp.data['message']['id']
+        # Held message never notified the recipient.
+        self.assertEqual(self._mentor_message_notifications().count(), 0)
+
+        edit = self._patch(msg_id, 'Sorry, I will share notes in our next session.')
+        self.assertEqual(edit.status_code, 200, edit.content)
+        msg = Message.objects.get(pk=msg_id)
+        self.assertEqual(msg.status, Message.Status.DELIVERED)
+        # The release must notify the recipient exactly once.
+        self.assertEqual(self._mentor_message_notifications().count(), 1)
+
+        # Recipient can now see the released message.
+        mentor_client = APIClient()
+        mentor_client.force_authenticate(self.mentor)
+        listing = mentor_client.get(f'/api/messaging/messages/?conversation={self.conv.pk}')
+        ids = [m['id'] for m in listing.data['results']]
+        self.assertIn(msg_id, ids)
+
+    def test_admin_approval_of_edited_flagged_message_notifies_recipients(self):
+        """Task 6 regression guard: releasing an EDITED flagged message via
+        ModerationService.approve() must still notify recipients - the edit
+        suppression only applies within the edit request itself."""
+        from apps.moderation.service import ModerationService
+        resp = self._send('reach me at jordan@example.com')
+        self.assertEqual(resp.status_code, 202, resp.content)
+        msg_id = resp.data['message']['id']
+
+        # Edit to a body that is still held (phone number).
+        edit = self._patch(msg_id, 'call me on 07700 900123')
+        self.assertEqual(edit.status_code, 202, edit.content)
+        self.assertEqual(self._mentor_message_notifications().count(), 0)
+
+        admin = make_user('approver-edit@example.com', role=User.Role.ADMIN, is_staff=True)
+        msg = Message.objects.get(pk=msg_id)
+        self.assertIsNotNone(msg.edited_at)
+        ModerationService.approve(msg, admin)
+        msg.refresh_from_db()
+        self.assertEqual(msg.status, Message.Status.DELIVERED)
+        self.assertEqual(self._mentor_message_notifications().count(), 1)
+
+    def test_held_message_editable_after_window(self):
+        resp = self._send('reach me at jordan@example.com')
+        self.assertEqual(resp.status_code, 202, resp.content)
+        msg_id = resp.data['message']['id']
+        from django.utils import timezone
+        from datetime import timedelta
+        Message.objects.filter(pk=msg_id).update(
+            sent_at=timezone.now() - timedelta(hours=2)
+        )
+        edit = self._patch(msg_id, 'A clean replacement body.')
+        self.assertEqual(edit.status_code, 200, edit.content)
+        msg = Message.objects.get(pk=msg_id)
+        self.assertEqual(msg.status, Message.Status.DELIVERED)
+
+    def test_normal_send_still_notifies_recipients(self):
+        resp = self._send('A perfectly normal clean message.')
+        self.assertEqual(resp.status_code, 201, resp.content)
+        self.assertEqual(self._mentor_message_notifications().count(), 1)
+
+    def test_edit_of_delivered_message_does_not_duplicate_notifications(self):
+        resp = self._send('A perfectly normal clean message.')
+        self.assertEqual(resp.status_code, 201, resp.content)
+        self.assertEqual(self._mentor_message_notifications().count(), 1)
+
+        edit = self._patch(resp.data['id'], 'A clean edit of the same message.')
+        self.assertEqual(edit.status_code, 200, edit.content)
+        self.assertEqual(self._mentor_message_notifications().count(), 1)
+
+    def test_cannot_edit_another_users_message(self):
+        msg = Message.objects.create(
+            conversation=self.conv, sender=self.mentor,
+            body='Mentor message.', status=Message.Status.DELIVERED,
+        )
+        edit = self._patch(msg.pk, 'Hijacked body')
+        self.assertEqual(edit.status_code, 403, edit.content)
+        self.assertEqual(edit.data['detail'], 'You can only edit your own messages.')
+        msg.refresh_from_db()
+        self.assertEqual(msg.body, 'Mentor message.')
+
+    def test_non_participant_cannot_edit(self):
+        outsider = make_user('outsider-edit@example.com', role=User.Role.SCHOLAR)
+        msg = Message.objects.create(
+            conversation=self.conv, sender=self.scholar,
+            body='Private message.', status=Message.Status.DELIVERED,
+        )
+        outsider_client = APIClient()
+        outsider_client.force_authenticate(outsider)
+        edit = self._patch(msg.pk, 'Hijacked body', client=outsider_client)
+        self.assertEqual(edit.status_code, 404, edit.content)
+
+    def test_delivered_message_not_editable_after_window(self):
+        resp = self._send('Original clean message.')
+        self.assertEqual(resp.status_code, 201, resp.content)
+        msg_id = resp.data['id']
+        from django.utils import timezone
+        from datetime import timedelta
+        Message.objects.filter(pk=msg_id).update(
+            sent_at=timezone.now() - timedelta(minutes=16)
+        )
+        edit = self._patch(msg_id, 'Too late to change this.')
+        self.assertEqual(edit.status_code, 403, edit.content)
+        self.assertEqual(
+            edit.data['detail'],
+            'Messages can only be edited within 15 minutes of sending.',
+        )
+
+    def test_mass_message_not_editable(self):
+        mass_conv = Conversation.objects.create(
+            conversation_type=Conversation.ConversationType.MASS_MESSAGE, subject='Broadcast'
+        )
+        mass_conv.participants.set([self.scholar, self.mentor])
+        msg = Message.objects.create(
+            conversation=mass_conv, sender=self.scholar,
+            body='Broadcast body.', status=Message.Status.DELIVERED,
+        )
+        edit = self._patch(msg.pk, 'Edited broadcast')
+        self.assertEqual(edit.status_code, 403, edit.content)
+        self.assertEqual(edit.data['detail'], 'Broadcast messages cannot be edited.')
+
+    def test_deleted_message_not_editable(self):
+        # For a non-staff sender the visibility queryset (Task 5) hides
+        # soft-deleted messages entirely, so the edit 404s.
+        msg = Message.objects.create(
+            conversation=self.conv, sender=self.scholar,
+            body='Soft-deleted message.', status=Message.Status.DELETED,
+        )
+        edit = self._patch(msg.pk, 'Resurrected body')
+        self.assertEqual(edit.status_code, 404, edit.content)
+        msg.refresh_from_db()
+        self.assertEqual(msg.body, 'Soft-deleted message.')
+
+        # A staff sender CAN load a deleted message, but the status guard
+        # still refuses the edit.
+        admin = make_user('admin-edit@example.com', role=User.Role.ADMIN, is_staff=True)
+        self.conv.participants.add(admin)
+        admin_msg = Message.objects.create(
+            conversation=self.conv, sender=admin,
+            body='Deleted admin message.', status=Message.Status.DELETED,
+        )
+        admin_client = APIClient()
+        admin_client.force_authenticate(admin)
+        edit = self._patch(admin_msg.pk, 'Resurrected body', client=admin_client)
+        self.assertEqual(edit.status_code, 403, edit.content)
+        self.assertEqual(edit.data['detail'], 'This message cannot be edited.')
+
+    def test_empty_body_rejected(self):
+        resp = self._send('Original clean message.')
+        self.assertEqual(resp.status_code, 201, resp.content)
+        edit = self._patch(resp.data['id'], '   ')
+        self.assertEqual(edit.status_code, 400, edit.content)
+        self.assertEqual(edit.data['detail'], 'Message body cannot be empty.')
+
+    def test_put_and_delete_are_rejected(self):
+        resp = self._send('Original clean message.')
+        self.assertEqual(resp.status_code, 201, resp.content)
+        msg_id = resp.data['id']
+        put = self.client_api.put(
+            f'/api/messaging/messages/{msg_id}/',
+            {'conversation': self.conv.pk, 'body': 'Replaced'},
+        )
+        self.assertEqual(put.status_code, 405, put.content)
+        delete = self.client_api.delete(f'/api/messaging/messages/{msg_id}/')
+        self.assertEqual(delete.status_code, 405, delete.content)
+        msg = Message.objects.get(pk=msg_id)
+        self.assertEqual(msg.body, 'Original clean message.')

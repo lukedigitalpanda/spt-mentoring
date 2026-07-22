@@ -98,6 +98,9 @@ class Message(models.Model):
     sender = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='sent_messages')
     body = models.TextField()
     sent_at = models.DateTimeField(auto_now_add=True)
+    # Set when the sender edits the message (Task 13). Every edit resets the
+    # status to PENDING and re-runs moderation before re-delivery.
+    edited_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     moderation_note = models.TextField(blank=True)
     moderated_by = models.ForeignKey(

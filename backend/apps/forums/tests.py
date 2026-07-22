@@ -126,3 +126,120 @@ class ForumPostAttachmentTests(TestCase):
             format='multipart',
         )
         self.assertEqual(resp.status_code, 400, resp.content)
+
+
+class PostEditTests(TestCase):
+    """Task 13 (P2-4): forum post edits are author-or-staff only and always
+    re-moderated; the previously unmoderated PATCH/PUT/DELETE holes are closed."""
+
+    def setUp(self):
+        ModerationService.invalidate_cache()
+        self.author = make_user('post-author@example.com')
+        self.other = make_user('post-other@example.com')
+        self.staff = make_user('post-staff@example.com', role=User.Role.ADMIN, is_staff=True)
+        self.forum = Forum.objects.create(title='General', visibility=Forum.Visibility.OPEN)
+        self.thread = Thread.objects.create(forum=self.forum, title='Hello', created_by=self.author)
+        self.client_api = APIClient()
+        self.client_api.force_authenticate(self.author)
+
+    def tearDown(self):
+        ModerationService.invalidate_cache()
+
+    def _create_visible_post(self):
+        resp = self.client_api.post(
+            '/api/forums/posts/',
+            {'thread': self.thread.pk, 'body': 'A perfectly clean first draft.'},
+            format='json',
+        )
+        assert resp.status_code == 201, resp.content
+        return Post.objects.get(pk=resp.data['id'])
+
+    def _patch(self, post_id, body, client=None):
+        return (client or self.client_api).patch(
+            f'/api/forums/posts/{post_id}/', {'body': body}, format='json'
+        )
+
+    def test_author_edit_clean_stays_visible_with_edited_marker(self):
+        post = self._create_visible_post()
+        self.assertIsNone(post.edited_at)
+        history_before = post.history.count()
+
+        edit = self._patch(post.pk, 'A clean improved second draft.')
+        self.assertEqual(edit.status_code, 200, edit.content)
+        self.assertEqual(edit.data['body'], 'A clean improved second draft.')
+        self.assertIsNotNone(edit.data['edited_at'])
+
+        post.refresh_from_db()
+        self.assertEqual(post.status, Post.Status.VISIBLE)
+        self.assertIsNotNone(post.edited_at)
+        self.assertGreater(post.history.count(), history_before)
+
+    def test_author_edit_to_flagged_term_is_held(self):
+        ModerationTerm.objects.create(
+            term='shit', match_type=ModerationTerm.MatchType.SUBSTRING,
+            severity=ModerationTerm.Severity.MEDIUM, source='bulk_import_v1', is_active=True,
+        )
+        ModerationService.invalidate_cache()
+        post = self._create_visible_post()
+        edit = self._patch(post.pk, 'this is shit')
+        self.assertEqual(edit.status_code, 202, edit.content)
+        self.assertEqual(edit.data['moderation_status'], 'pending_review')
+        post.refresh_from_db()
+        self.assertEqual(post.status, Post.Status.FLAGGED)
+        self.assertIsNotNone(post.edited_at)
+
+    def test_author_edit_to_blocked_term_is_hidden(self):
+        ModerationTerm.objects.create(
+            term='murder', match_type=ModerationTerm.MatchType.SUBSTRING,
+            severity=ModerationTerm.Severity.CRITICAL, source='bulk_import_v1', is_active=True,
+        )
+        ModerationService.invalidate_cache()
+        post = self._create_visible_post()
+        edit = self._patch(post.pk, 'I want to murder')
+        self.assertEqual(edit.status_code, 400, edit.content)
+        self.assertEqual(edit.data['moderation_status'], 'blocked')
+        post.refresh_from_db()
+        self.assertEqual(post.status, Post.Status.HIDDEN)
+
+    def test_non_author_cannot_edit(self):
+        post = self._create_visible_post()
+        other_client = APIClient()
+        other_client.force_authenticate(self.other)
+        edit = self._patch(post.pk, 'Hijacked body', client=other_client)
+        self.assertEqual(edit.status_code, 403, edit.content)
+        self.assertEqual(edit.data['detail'], 'You can only edit your own posts.')
+        post.refresh_from_db()
+        self.assertEqual(post.body, 'A perfectly clean first draft.')
+
+    def test_staff_can_edit_and_edit_is_remoderated(self):
+        post = self._create_visible_post()
+        staff_client = APIClient()
+        staff_client.force_authenticate(self.staff)
+        edit = self._patch(post.pk, 'Tidied up by staff.', client=staff_client)
+        self.assertEqual(edit.status_code, 200, edit.content)
+        post.refresh_from_db()
+        self.assertEqual(post.body, 'Tidied up by staff.')
+        self.assertEqual(post.status, Post.Status.VISIBLE)
+
+    def test_empty_body_rejected(self):
+        post = self._create_visible_post()
+        edit = self._patch(post.pk, '   ')
+        self.assertEqual(edit.status_code, 400, edit.content)
+        self.assertEqual(edit.data['detail'], 'Post body cannot be empty.')
+
+    def test_put_is_rejected(self):
+        post = self._create_visible_post()
+        put = self.client_api.put(
+            f'/api/forums/posts/{post.pk}/',
+            {'thread': self.thread.pk, 'body': 'Full replacement'},
+            format='json',
+        )
+        self.assertEqual(put.status_code, 405, put.content)
+
+    def test_non_admin_cannot_delete(self):
+        post = self._create_visible_post()
+        other_client = APIClient()
+        other_client.force_authenticate(self.other)
+        delete = other_client.delete(f'/api/forums/posts/{post.pk}/')
+        self.assertEqual(delete.status_code, 403, delete.content)
+        self.assertTrue(Post.objects.filter(pk=post.pk).exists())

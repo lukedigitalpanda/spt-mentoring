@@ -111,6 +111,19 @@ class Message(models.Model):
     )
     moderated_at = models.DateTimeField(null=True, blank=True)
 
+    # Task 25: set True ONLY by send_mass_message_task() on the single
+    # synchronous Message it creates per recipient (the sanitised
+    # MassMessage.body copy). Every other creation path - normal sends,
+    # replies into that same conversation, admin Arkwright reply-panel
+    # replies - leaves this at its default False. This is the sole,
+    # exact boundary the frontend uses to decide whether a body is
+    # trusted, backend-sanitised HTML safe for dangerouslySetInnerHTML;
+    # it must never be set anywhere else.
+    is_broadcast = models.BooleanField(
+        default=False,
+        help_text='True only for the system-authored broadcast row of a mass message; gates rich-text rendering',
+    )
+
     # Attachments
     attachment = models.FileField(upload_to='message_attachments/', blank=True, null=True)
     attachment_name = models.CharField(max_length=255, blank=True)

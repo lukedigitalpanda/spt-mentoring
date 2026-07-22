@@ -938,15 +938,19 @@ class MessageEditTests(TestCase):
 
 
 class MessageIsBroadcastSerialisationTests(TestCase):
-    """Task 25 hardening: the frontend decides whether a message body is
-    trusted, backend-sanitised HTML (safe to render via
-    dangerouslySetInnerHTML) purely from MessageSerializer.is_broadcast.
-    That flag must be true ONLY for the system-authored broadcast Message
-    send_mass_message_task() creates, and false for every reply into that
-    same conversation - even one from Arkwright itself - since replies are
-    ordinary, unsanitised chat messages. Getting this wrong (e.g. keying
-    off conversation_type or message position instead of sender identity)
-    would let unsanitised user text render as HTML."""
+    """Task 25 hardening (closed): the frontend decides whether a message
+    body is trusted, backend-sanitised HTML (safe to render via
+    dangerouslySetInnerHTML) purely from MessageSerializer.is_broadcast,
+    which now mirrors a real, exact model field (Message.is_broadcast) set
+    ONLY by send_mass_message_task() on the one synchronous row it creates
+    per recipient. Every other Message creation path - normal sends,
+    replies into a mass_message conversation, admin Arkwright reply-panel
+    replies - leaves it at its default False. Earlier iterations of this
+    boundary keyed off message position (broke under a WS-loading race)
+    and then sender identity + conversation_type (left a residual: an
+    Arkwright-authored reply also read as broadcast); this per-row flag,
+    set at creation time on exactly one row, has no such gap - there is no
+    other code path that can set it True."""
 
     def setUp(self):
         self.scholar = make_user('broadcast-scholar@example.com', role=User.Role.SCHOLAR)
@@ -965,6 +969,7 @@ class MessageIsBroadcastSerialisationTests(TestCase):
         broadcast = Message.objects.create(
             conversation=self.conv, sender=self.arkwright,
             body='<p>Welcome to the programme.</p>', status=Message.Status.DELIVERED,
+            is_broadcast=True,
         )
         resp = self.client_api.get(f'/api/messaging/messages/?conversation={self.conv.pk}')
         self.assertEqual(resp.status_code, 200, resp.content)
@@ -975,6 +980,7 @@ class MessageIsBroadcastSerialisationTests(TestCase):
         Message.objects.create(
             conversation=self.conv, sender=self.arkwright,
             body='<p>Welcome to the programme.</p>', status=Message.Status.DELIVERED,
+            is_broadcast=True,
         )
         reply = Message.objects.create(
             conversation=self.conv, sender=self.scholar,
@@ -985,20 +991,18 @@ class MessageIsBroadcastSerialisationTests(TestCase):
         row = next(m for m in resp.data['results'] if m['id'] == reply.pk)
         self.assertFalse(row['is_broadcast'])
 
-    def test_arkwright_reply_in_same_thread_is_a_documented_residual(self):
-        # Known accepted trade-off (see MessageSerializer.get_is_broadcast):
-        # is_broadcast keys off sender identity + conversation_type, not
-        # message position, so a free-typed reply FROM Arkwright (e.g. via
-        # the admin reply panel) into the same mass_message conversation
-        # also serialises True even though it was never run through
-        # sanitise_rich_text(). This is deliberately NOT a security
-        # regression versus the position-based approach it replaces - the
-        # only actor who can trigger it is an admin operating as
-        # Arkwright, not an arbitrary recipient - but it is a real residual
-        # this test pins so it cannot silently change unnoticed.
+    def test_arkwright_reply_in_same_thread_now_renders_safe(self):
+        # Residual closed: a free-typed reply FROM Arkwright (e.g. via the
+        # admin reply panel) into the same mass_message conversation is
+        # created without is_broadcast=True (the default), so it now
+        # correctly serialises False even though the sender and
+        # conversation_type are identical to the broadcast row. This is
+        # the exact case that was a documented, accepted residual under
+        # the identity-based approach and is now definitively closed.
         Message.objects.create(
             conversation=self.conv, sender=self.arkwright,
             body='<p>Welcome to the programme.</p>', status=Message.Status.DELIVERED,
+            is_broadcast=True,
         )
         arkwright_reply = Message.objects.create(
             conversation=self.conv, sender=self.arkwright,
@@ -1008,7 +1012,7 @@ class MessageIsBroadcastSerialisationTests(TestCase):
         self.assertEqual(resp.status_code, 200, resp.content)
         rows = [m for m in resp.data['results'] if m['id'] == arkwright_reply.pk]
         self.assertEqual(len(rows), 1)
-        self.assertTrue(rows[0]['is_broadcast'])
+        self.assertFalse(rows[0]['is_broadcast'])
 
     def test_message_in_direct_conversation_is_never_broadcast(self):
         direct_conv = Conversation.objects.create(conversation_type=Conversation.ConversationType.DIRECT)
@@ -1021,3 +1025,35 @@ class MessageIsBroadcastSerialisationTests(TestCase):
         self.assertEqual(resp.status_code, 200, resp.content)
         row = next(m for m in resp.data['results'] if m['id'] == msg.pk)
         self.assertFalse(row['is_broadcast'])
+
+    def test_is_broadcast_is_read_only_and_cannot_be_set_via_the_api(self):
+        # A client sending is_broadcast=true in the POST body must not be
+        # able to make an ordinary message render as trusted HTML.
+        resp = self.client_api.post(
+            '/api/messaging/messages/',
+            {'conversation': self.conv.pk, 'body': '<img src=x onerror=alert(1)>', 'is_broadcast': True},
+        )
+        self.assertIn(resp.status_code, (200, 201, 202), resp.content)
+        msg_id = resp.data.get('id') or resp.data.get('message', {}).get('id')
+        msg = Message.objects.get(pk=msg_id)
+        self.assertFalse(msg.is_broadcast)
+
+    def test_send_mass_message_task_sets_is_broadcast_on_the_one_broadcast_row(self):
+        # End-to-end: the actual task, not a hand-built Message, must be
+        # the thing that sets is_broadcast=True - this is the real
+        # production code path the frontend trusts.
+        from .models import MassMessage
+        from .tasks import send_mass_message_task
+        admin = make_user('mm-broadcast-admin@example.com', role=User.Role.ADMIN, is_staff=True)
+        recipient = make_user('mm-broadcast-recipient@example.com', role=User.Role.SCHOLAR)
+        mm = MassMessage.objects.create(
+            sender=admin, subject='Task 25 rollout', body='<p>Rich update.</p>',
+            recipient_roles=['scholar'],
+        )
+        send_mass_message_task(mm.pk)
+        broadcast = Message.objects.get(
+            conversation__conversation_type=Conversation.ConversationType.MASS_MESSAGE,
+            conversation__participants=recipient,
+        )
+        self.assertTrue(broadcast.is_broadcast)
+        self.assertEqual(broadcast.body, mm.body)

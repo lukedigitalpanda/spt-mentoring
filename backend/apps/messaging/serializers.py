@@ -3,22 +3,9 @@ from .models import Conversation, Message, MessageRead, MassMessage, AbuseReport
 from apps.users.validators import validate_message_attachment
 
 
-# Identity of the system account send_mass_message_task (and the admin
-# reply panels) send broadcasts from - see apps/messaging/tasks.py and
-# apps/messaging/admin.py get_or_create_arkwright(). Matched by email, not
-# id: this must stay a lookup rather than a get_or_create() so serialising
-# a message (a read) can never have the side effect of creating the
-# account. Kept as a literal here to mirror the existing convention used
-# throughout this app (tasks.py, admin.py, views.py, tests.py all match
-# 'arkwright@spt.org' the same way) rather than introducing a new shared
-# constant this task doesn't otherwise need.
-ARKWRIGHT_EMAIL = 'arkwright@spt.org'
-
-
 class MessageSerializer(serializers.ModelSerializer):
     sender_name = serializers.CharField(source='sender.full_name', read_only=True)
     is_read = serializers.SerializerMethodField()
-    is_broadcast = serializers.SerializerMethodField()
     attachment = serializers.FileField(validators=[validate_message_attachment], required=False, allow_null=True)
 
     class Meta:
@@ -28,44 +15,21 @@ class MessageSerializer(serializers.ModelSerializer):
             'sent_at', 'edited_at', 'status', 'attachment', 'attachment_name',
             'is_read', 'is_broadcast',
         ]
-        read_only_fields = ['sent_at', 'edited_at', 'status', 'sender']
+        # is_broadcast is a plain model field (Message.is_broadcast), set
+        # ONLY by send_mass_message_task() on the one synchronous row it
+        # creates per recipient - see apps/messaging/models.py and
+        # apps/messaging/tasks.py. It is read-only here so it can never be
+        # set/overridden via the API (POST/PATCH); this is the sole, exact
+        # signal the frontend uses to decide whether a body is trusted,
+        # backend-sanitised HTML safe for dangerouslySetInnerHTML - it must
+        # never be settable by a client or inferred from identity/position.
+        read_only_fields = ['sent_at', 'edited_at', 'status', 'sender', 'is_broadcast']
 
     def get_is_read(self, obj):
         request = self.context.get('request')
         if request:
             return obj.reads.filter(user=request.user).exists()
         return False
-
-    def get_is_broadcast(self, obj):
-        # True for messages in a mass_message conversation sent by the
-        # Arkwright system account. This is the sole signal the frontend
-        # uses to decide whether a message body is trusted,
-        # backend-sanitised HTML (safe for dangerouslySetInnerHTML) versus
-        # ordinary unsanitised chat text - get it wrong here and that
-        # becomes an XSS hole, so it keys off identity + conversation
-        # type, never off position/index, which a history-loading WS race
-        # or a second human participant in the thread can invalidate.
-        #
-        # Known accepted residual (self-XSS at the current topology): a
-        # mass_message conversation is always exactly Arkwright + one
-        # recipient, and Arkwright is also the identity used for admin
-        # reply-panel replies (apps/messaging/admin.py
-        # arkwright_reply_panel) - those replies are free-typed, NOT run
-        # through sanitise_rich_text(), yet also serialise is_broadcast
-        # True because they share the same sender+conversation_type. The
-        # actor who can trigger unsanitised-HTML rendering this way is
-        # therefore limited to an admin operating as Arkwright (not an
-        # arbitrary recipient) - a materially smaller risk than the
-        # position-based bug this replaces, but not a full closure. If a
-        # mass_message conversation ever gains a second human participant,
-        # or the admin reply panel needs real rich text, that reply path
-        # would need its own sanitise_rich_text() call before this
-        # trade-off remains acceptable.
-        return (
-            obj.conversation.conversation_type == Conversation.ConversationType.MASS_MESSAGE
-            and obj.sender_id is not None
-            and obj.sender.email == ARKWRIGHT_EMAIL
-        )
 
 
 class ConversationSerializer(serializers.ModelSerializer):

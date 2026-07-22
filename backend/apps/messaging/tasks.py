@@ -121,12 +121,16 @@ def send_mass_message_task(mass_message_id):
         )
         conv.participants.add(arkwright, recipient)
 
-        # Insert message already marked DELIVERED (bypasses moderation — it's admin-sent)
+        # Insert message already marked DELIVERED (bypasses moderation — it's admin-sent).
+        # is_broadcast=True marks this as THE sanitised MassMessage.body copy - the
+        # exact, sole signal the frontend uses to allow rich-HTML rendering. Every
+        # other Message this task (or anything else) creates must leave it False.
         Message.objects.create(
             conversation=conv,
             sender=arkwright,
             body=msg.body,
             status=Message.Status.DELIVERED,
+            is_broadcast=True,
         )
 
         # In-app notification

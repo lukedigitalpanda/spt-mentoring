@@ -71,3 +71,53 @@ class SanitiseRichTextTests(TestCase):
     def test_empty_body_returns_falsy_unchanged(self):
         self.assertEqual(sanitise_rich_text(''), '')
         self.assertIsNone(sanitise_rich_text(None))
+
+    def test_underline_tag_survives(self):
+        # TinyMCE's toolbar is configured (settings.TINYMCE_DEFAULT_CONFIG,
+        # 'formats': {'underline': {'inline': 'u'}}) to emit a bare <u> tag
+        # for the underline button instead of its default
+        # <span style="text-decoration: underline">, which our style
+        # whitelist (color only) would otherwise strip. That config choice
+        # isn't headlessly testable, but this pins that the sanitiser itself
+        # keeps <u> whenever it's actually produced.
+        result = sanitise_rich_text('<u>underlined</u>')
+        self.assertIn('<u>underlined</u>', result)
+
+
+class NewsItemBodySanitisedOnSaveTests(TestCase):
+    """Task 24 hardening: NewsItemViewSet (REST API) writes body without
+    going through the admin form's clean_body(), so the gate must also live
+    on the model - sanitise_rich_text() must run on every save(), not just
+    on the admin form path."""
+
+    def test_script_in_body_is_stripped_when_created_via_the_orm(self):
+        from .models import NewsItem
+        item = NewsItem.objects.create(
+            title='Test article',
+            slug='test-article-orm-sanitise',
+            body='<p>Hello</p><script>alert(1)</script>',
+        )
+        item.refresh_from_db()
+        self.assertNotIn('<script', item.body)
+        self.assertNotIn('alert(1)', item.body)
+        self.assertIn('Hello', item.body)
+
+    def test_plain_text_body_is_unaffected_by_save(self):
+        from .models import NewsItem
+        item = NewsItem.objects.create(
+            title='Plain article',
+            slug='test-article-orm-plain',
+            body='Just plain text.',
+        )
+        item.refresh_from_db()
+        self.assertEqual(item.body, 'Just plain text.')
+
+    def test_empty_body_saves_safely(self):
+        from .models import NewsItem
+        item = NewsItem.objects.create(
+            title='Empty body article',
+            slug='test-article-orm-empty',
+            body='',
+        )
+        item.refresh_from_db()
+        self.assertEqual(item.body, '')

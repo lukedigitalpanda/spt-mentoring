@@ -10,6 +10,8 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from simple_history.models import HistoricalRecords
 
+from apps.news.sanitiser import sanitise_rich_text
+
 
 class Conversation(models.Model):
     """A thread between two or more participants."""
@@ -162,6 +164,14 @@ class MassMessage(models.Model):
         default=True,
         help_text='Allow recipients to reply to this broadcast. When disabled, the reply UI is hidden.',
     )
+
+    def save(self, *args, **kwargs):
+        # Belt and braces: the admin form's clean_body() already sanitises,
+        # but body can also be written via the REST API (MassMessageViewSet)
+        # which does not route through that form - sanitise here too so no
+        # write path can persist unsanitised HTML.
+        self.body = sanitise_rich_text(self.body)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f'Mass message: {self.subject}'

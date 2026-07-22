@@ -5,6 +5,8 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from simple_history.models import HistoricalRecords
 
+from .sanitiser import sanitise_rich_text
+
 
 class NewsItem(models.Model):
     class Status(models.TextChoices):
@@ -49,6 +51,14 @@ class NewsItem(models.Model):
 
     class Meta:
         ordering = ['-published_at', '-created_at']
+
+    def save(self, *args, **kwargs):
+        # Belt and braces: the admin form's clean_body() already sanitises,
+        # but body can also be written via the REST API (NewsItemViewSet)
+        # which does not route through that form - sanitise here too so no
+        # write path can persist unsanitised HTML.
+        self.body = sanitise_rich_text(self.body)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.title

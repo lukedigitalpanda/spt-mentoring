@@ -227,30 +227,60 @@ class MassMessageSendTests(TestCase):
         self.assertEqual(resp.status_code, 400)
 
 
+class MassMessageBodySanitisedOnSaveTests(TestCase):
+    """Task 24 hardening: MassMessageViewSet (REST API) writes body without
+    going through the admin form's clean_body(), so the gate must also live
+    on the model - sanitise_rich_text() must run on every save(), not just
+    on the admin form path."""
+
+    def test_script_in_body_is_stripped_when_created_via_the_orm(self):
+        from .models import MassMessage
+        admin = make_user('mm-orm-admin@example.com', role=User.Role.ADMIN, is_staff=True)
+        mm = MassMessage.objects.create(
+            sender=admin, subject='Hello', body='<p>Hi</p><script>alert(1)</script>',
+        )
+        mm.refresh_from_db()
+        self.assertNotIn('<script', mm.body)
+        self.assertNotIn('alert(1)', mm.body)
+        self.assertIn('Hi', mm.body)
+
+    def test_plain_text_body_is_unaffected_by_save(self):
+        from .models import MassMessage
+        admin = make_user('mm-orm-admin-plain@example.com', role=User.Role.ADMIN, is_staff=True)
+        mm = MassMessage.objects.create(sender=admin, subject='Hello', body='Just plain text.')
+        mm.refresh_from_db()
+        self.assertEqual(mm.body, 'Just plain text.')
+
+
 class MassMessageHtmlEmailTests(TestCase):
     """Task 24: mass message emails carry the (sanitised) HTML body as the
     primary content, with a plain-text fallback for clients that can't
-    render HTML - not the raw markup as the plain body."""
+    render HTML - not the raw markup as the plain body.
+
+    Task 24 hardening: a body with no tags at all (the plain AdminPage
+    textarea path) must be sent as a genuinely plain email - no
+    html_message alternative - not wrapped as "HTML" with nothing to
+    render. HTML_RE gates on tag presence so both cases are covered."""
 
     def setUp(self):
         from django.core import mail
-        from .models import MassMessage
         mail.outbox = []
         self.admin = make_user('mm-html-admin@example.com', role=User.Role.ADMIN, is_staff=True)
         self.recipient = make_user(
             'mm-html-recipient@example.com', role=User.Role.SCHOLAR, notification_email=True,
         )
-        self.mm = MassMessage.objects.create(
-            sender=self.admin,
-            subject='Rich announcement',
-            body='<p>Hello <b>everyone</b></p>',
-            recipient_roles=['scholar'],
-        )
 
-    def test_email_has_html_alternative_and_plain_text_fallback(self):
-        from django.core import mail
+    def _send(self, body):
+        from .models import MassMessage
         from .tasks import send_mass_message_task
-        send_mass_message_task(self.mm.pk)
+        mm = MassMessage.objects.create(
+            sender=self.admin, subject='Announcement', body=body, recipient_roles=['scholar'],
+        )
+        send_mass_message_task(mm.pk)
+
+    def test_rich_body_has_html_alternative_and_plain_text_fallback(self):
+        from django.core import mail
+        self._send('<p>Hello <b>everyone</b></p>')
 
         self.assertEqual(len(mail.outbox), 1)
         sent = mail.outbox[0]
@@ -265,6 +295,17 @@ class MassMessageHtmlEmailTests(TestCase):
         html_alternatives = [content for content, mimetype in sent.alternatives if mimetype == 'text/html']
         self.assertEqual(len(html_alternatives), 1)
         self.assertIn('<b>everyone</b>', html_alternatives[0])
+
+    def test_plain_body_has_no_html_alternative_and_keeps_newlines(self):
+        from django.core import mail
+        plain_body = 'Hello everyone,\n\nSecond paragraph, no markup here.'
+        self._send(plain_body)
+
+        self.assertEqual(len(mail.outbox), 1)
+        sent = mail.outbox[0]
+
+        self.assertEqual(sent.body, plain_body)
+        self.assertEqual(sent.alternatives, [])
 
 
 class MessageHistoryTests(TestCase):

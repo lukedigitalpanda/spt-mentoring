@@ -1,12 +1,24 @@
 """Celery tasks for async messaging operations."""
 from celery import shared_task
+import html
 import logging
+import re
+
+from django.utils.html import strip_tags
 
 logger = logging.getLogger(__name__)
 
 NO_CONTACT_REMINDER_SUBJECT = 'SPT Mentoring – Time to connect!'
 SPONSOR_UPDATE_SUBJECT = 'SPT Scholarships – Time to update your sponsor'
 MATCH_EMAIL_SUBJECT = 'SPT Mentoring - You have been matched'
+
+# Task 24/25: a MassMessage.body written via the plain AdminPage textarea
+# (rather than the TinyMCE admin editor) is inert plain text and should be
+# sent as a plain email, not wrapped as an "HTML" message with no markup.
+# This matches the tag-sniffing the frontend uses (Task 25) to decide
+# whether to render a body as HTML or as plain text, so both ends agree on
+# what counts as "rich".
+HTML_RE = re.compile(r'<([a-z]+)(\s[^>]*)?>', re.I)
 
 
 def build_no_contact_body(first_name, partner_name, partner_role):
@@ -131,13 +143,14 @@ def send_mass_message_task(mass_message_id):
         # Email (only if user has email notifications enabled)
         if recipient.notification_email and recipient.email:
             try:
-                from django.utils.html import strip_tags
+                is_rich = bool(HTML_RE.search(msg.body or ''))
+                plain_body = html.unescape(strip_tags(msg.body)) if is_rich else msg.body
                 send_mail(
                     subject=msg.subject,
-                    message=strip_tags(msg.body),
+                    message=plain_body,
                     from_email=msg.send_from_email,
                     recipient_list=[recipient.email],
-                    html_message=msg.body,
+                    html_message=msg.body if is_rich else None,
                     fail_silently=True,
                 )
             except Exception:

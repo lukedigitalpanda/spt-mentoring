@@ -475,4 +475,11 @@ TINYMCE_DEFAULT_CONFIG = {
     'toolbar': 'bold italic underline forecolor | bullist numlist | link | removeformat',
     'branding': False,
     'height': 320,
+    # TinyMCE's default underline command emits
+    # <span style="text-decoration: underline">, which the sanitiser's style
+    # whitelist (color only) strips - forcing the toolbar to emit a bare
+    # <u> instead keeps underlining working end to end. Not headlessly
+    # testable (requires driving the editor in a browser); manual smoke
+    # test still pending - see task report.
+    'formats': {'underline': {'inline': 'u'}},
 }

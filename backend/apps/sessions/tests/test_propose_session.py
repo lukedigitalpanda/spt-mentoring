@@ -215,3 +215,21 @@ class ConfirmSessionTest(TestCase):
         )
         resp = self._client(self.scholar).post(f'/api/sessions/sessions/{session.pk}/confirm/')
         self.assertEqual(resp.status_code, 403, resp.data)
+
+    def test_cannot_confirm_a_non_pending_session(self):
+        propose = self._client(self.mentor).post('/api/sessions/sessions/propose/', {
+            'scholar': self.scholar.id,
+            'start_time': self.start.isoformat(),
+            'end_time': self.end.isoformat(),
+            'title': 'Careers chat',
+        }, format='json')
+        self.assertEqual(propose.status_code, 201, propose.data)
+        session_id = propose.data['id']
+
+        cancel = self._client(self.mentor).post(f'/api/sessions/sessions/{session_id}/cancel/')
+        self.assertEqual(cancel.status_code, 200, cancel.data)
+
+        confirm = self._client(self.scholar).post(f'/api/sessions/sessions/{session_id}/confirm/')
+        self.assertEqual(confirm.status_code, 400, confirm.data)
+        session = MentoringSession.objects.get(pk=session_id)
+        self.assertEqual(session.status, MentoringSession.Status.CANCELLED)

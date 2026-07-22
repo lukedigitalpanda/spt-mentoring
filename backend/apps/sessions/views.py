@@ -179,6 +179,11 @@ class MentoringSessionViewSet(viewsets.ModelViewSet):
     def confirm(self, request, pk=None):
         session = self.get_object()
         user = request.user
+        if session.status != MentoringSession.Status.PENDING:
+            return Response(
+                {'error': 'Only pending sessions can be confirmed.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         is_staff = user.is_staff or user.role == 'admin'
         if not is_staff:
             if session.created_by_id is None:

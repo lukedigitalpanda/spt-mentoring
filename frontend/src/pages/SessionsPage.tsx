@@ -226,6 +226,18 @@ function SessionCard({ session, currentUserId, onAction }: {
                 {joining ? 'Starting…' : 'Join video call'}
               </button>
             )}
+            {session.status === 'confirmed' && !isJoinable && (
+              <button
+                type="button"
+                disabled
+                title="The join link becomes active 5 minutes before the session starts"
+                className="text-xs font-semibold bg-gradient-brand text-white px-3 py-1.5 rounded-lg flex items-center gap-1 opacity-50 cursor-not-allowed">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                Join video call (available 5 minutes before start)
+              </button>
+            )}
             {isMentor && session.status === 'pending' && (
               <>
                 <button onClick={() => onAction(session.id, 'confirm')}

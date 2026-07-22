@@ -9,6 +9,10 @@ import type { Conversation, Message } from '../types';
 const IS_COARSE_POINTER =
   typeof window !== 'undefined' && (window.matchMedia?.('(pointer: coarse)').matches ?? false);
 
+// Per-conversation draft persistence key — survives an orientation-change reload
+// in the same tab (sessionStorage), unlike component state.
+const draftKey = (id: number) => `chat-draft-${id}`;
+
 function ReportForm({ onSubmit, onCancel, isPending }: {
   onSubmit: (description: string) => void;
   onCancel: () => void;
@@ -200,10 +204,18 @@ export default function MessagesPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, wsMessages]);
 
+  // Restore (or clear) the per-conversation draft whenever the selected
+  // conversation changes, including on first load after a reload/rotation.
+  useEffect(() => {
+    setDraft(selectedConv ? sessionStorage.getItem(draftKey(selectedConv)) ?? '' : '');
+    requestAnimationFrame(() => autoGrow());
+  }, [selectedConv]);
+
   const sendMessage = async () => {
     const body = draft.trim();
     if (!body || !selectedConv) return;
     setDraft('');
+    if (selectedConv) sessionStorage.removeItem(draftKey(selectedConv));
     if (taRef.current) taRef.current.style.height = 'auto';
     setModerationNotice(null);
     const ws = wsRef.current;
@@ -229,6 +241,7 @@ export default function MessagesPage() {
         text: err?.response?.data?.detail || 'Your message could not be sent. Please try again.',
       });
       setDraft(body);
+      if (selectedConv) sessionStorage.setItem(draftKey(selectedConv), body);
       // setDraft is async, so the textarea's value (and thus scrollHeight)
       // has not updated yet — defer the re-grow to the next frame.
       requestAnimationFrame(() => autoGrow());
@@ -284,9 +297,9 @@ export default function MessagesPage() {
         </p>
       </div>
 
-      <div className="h-[calc(100vh-14rem)] flex rounded-2xl overflow-hidden shadow-card border border-purple-100">
+      <div className="h-[calc(100dvh-11rem)] md:h-[calc(100vh-14rem)] flex rounded-2xl overflow-hidden shadow-card border border-purple-100">
         {/* ── Sidebar ── */}
-        <div className="w-72 bg-white border-r border-purple-100 flex flex-col flex-shrink-0">
+        <div className={`w-full md:w-72 bg-white border-r border-purple-100 flex-col md:flex-shrink-0 ${selectedConv ? 'hidden md:flex' : 'flex'}`}>
           <div className="px-4 py-3 border-b border-purple-100 bg-gradient-brand-pale">
             <p className="text-xs font-bold text-navy-500 uppercase tracking-widest">Conversations</p>
           </div>
@@ -415,22 +428,31 @@ export default function MessagesPage() {
         </div>
 
         {/* ── Chat thread ── */}
-        <div className="flex-1 flex flex-col bg-[#faf9fd]">
+        <div className={`flex-1 min-w-0 flex-col bg-[#faf9fd] ${selectedConv ? 'flex' : 'hidden md:flex'}`}>
           {selectedConv ? (
             <>
               {/* Thread header */}
               <div className="px-5 py-3 bg-white border-b border-purple-100 flex items-center justify-between">
-                <div>
-                  <p className="font-bold text-sm text-navy-500">
-                    {selectedConvData?.subject ||
-                      selectedConvData?.participant_names.filter(n => n !== user?.full_name).join(', ') ||
-                      'Conversation'}
-                  </p>
-                  <p className="text-[11px] text-navy-500/40">
-                    {selectedConvData?.participant_names.join(', ')}
-                  </p>
+                <div className="flex items-center min-w-0">
+                  <button
+                    onClick={() => setSelectedConv(null)}
+                    className="md:hidden mr-2 p-2 -ml-2 rounded-lg text-navy-500/60 hover:bg-purple-50"
+                    aria-label="Back to conversations"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                  </button>
+                  <div className="min-w-0">
+                    <p className="font-bold text-sm text-navy-500 truncate">
+                      {selectedConvData?.subject ||
+                        selectedConvData?.participant_names.filter(n => n !== user?.full_name).join(', ') ||
+                        'Conversation'}
+                    </p>
+                    <p className="text-[11px] text-navy-500/40 truncate">
+                      {selectedConvData?.participant_names.join(', ')}
+                    </p>
+                  </div>
                 </div>
-                <span className="text-[10px] bg-purple-100 text-purple-700 font-semibold px-2 py-1 rounded-full uppercase tracking-wider">
+                <span className="text-[10px] bg-purple-100 text-purple-700 font-semibold px-2 py-1 rounded-full uppercase tracking-wider flex-shrink-0 ml-2">
                   Moderated
                 </span>
               </div>
@@ -442,7 +464,7 @@ export default function MessagesPage() {
                   const reported = reportedMessageIds.has(msg.id);
                   return (
                     <div key={`${msg.id}-${msg.sent_at}`} className={`flex min-w-0 ${isMine ? 'justify-end' : 'justify-start'}`}>
-                      <div className="max-w-sm min-w-0 group relative">
+                      <div className="max-w-[80%] sm:max-w-sm min-w-0 group relative">
                         {!isMine && (
                           <p className="text-[11px] font-semibold text-purple-500 mb-1 ml-1">{msg.sender_name}</p>
                         )}
@@ -565,7 +587,11 @@ export default function MessagesPage() {
                       ref={taRef}
                       rows={1}
                       value={draft}
-                      onChange={e => { setDraft(e.target.value); autoGrow(); }}
+                      onChange={e => {
+                        setDraft(e.target.value);
+                        if (selectedConv) sessionStorage.setItem(draftKey(selectedConv), e.target.value);
+                        autoGrow();
+                      }}
                       onKeyDown={e => {
                         if (e.key === 'Enter' && !e.shiftKey && !IS_COARSE_POINTER) {
                           e.preventDefault();

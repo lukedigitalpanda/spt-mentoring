@@ -76,6 +76,14 @@ function StarRating({ value, size = 'sm' }: { value: number; size?: 'sm' | 'md' 
 
 function MentorCard({ mentor, onBook }: { mentor: MentorCard; onBook: (m: MentorCard) => void }) {
   const initials = getInitials(mentor);
+  const [expandedBios, setExpandedBios] = useState<Set<number>>(new Set());
+  const toggleBio = (id: number) => {
+    setExpandedBios(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   return (
     <div className="bg-white rounded-2xl shadow-card border border-purple-100 overflow-hidden hover:shadow-brand transition-all group">
@@ -90,7 +98,7 @@ function MentorCard({ mentor, onBook }: { mentor: MentorCard; onBook: (m: Mentor
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="font-bold text-navy-500 text-base leading-tight">{mentor.full_name}</h3>
+              <h3 className="font-bold text-navy-500 text-base leading-tight break-words">{mentor.full_name}</h3>
               {mentor.is_verified && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-green-50 text-green-700 px-1.5 py-0.5 rounded-full">
                   <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
@@ -140,9 +148,16 @@ function MentorCard({ mentor, onBook }: { mentor: MentorCard; onBook: (m: Mentor
 
         {/* Bio */}
         {mentor.bio && (
-          <p className="mt-3 text-xs text-navy-500/70 line-clamp-2 leading-relaxed">
-            {mentor.bio}
-          </p>
+          <>
+            <p className={`mt-3 text-xs text-navy-500/70 leading-relaxed whitespace-pre-wrap break-words ${expandedBios.has(mentor.id) ? '' : 'line-clamp-2'}`}>
+              {mentor.bio}
+            </p>
+            {mentor.bio.length > 120 && (
+              <button onClick={() => toggleBio(mentor.id)} className="mt-1 text-xs font-medium text-pink-500 hover:underline">
+                {expandedBios.has(mentor.id) ? 'Show less' : 'Read more'}
+              </button>
+            )}
+          </>
         )}
 
         {/* Skills */}

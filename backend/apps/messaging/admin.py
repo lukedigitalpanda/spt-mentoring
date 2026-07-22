@@ -3,6 +3,8 @@ from django.contrib import admin
 from django.utils.html import format_html
 from import_export.admin import ExportMixin
 from import_export import resources, fields
+from tinymce.widgets import TinyMCE
+from apps.news.sanitiser import sanitise_rich_text
 from .models import Conversation, Message, MassMessage, AbuseReport
 
 
@@ -743,6 +745,7 @@ class MassMessageAdminForm(forms.ModelForm):
     class Meta:
         model = MassMessage
         fields = '__all__'
+        widgets = {'body': TinyMCE()}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -751,6 +754,9 @@ class MassMessageAdminForm(forms.ModelForm):
 
     def clean_recipient_roles(self):
         return list(self.cleaned_data.get('recipient_roles') or [])
+
+    def clean_body(self):
+        return sanitise_rich_text(self.cleaned_data.get('body'))
 
 
 @admin.register(MassMessage)

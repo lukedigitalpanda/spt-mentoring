@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     'simple_history',
     'guardian',
     'channels',
+    'tinymce',
     # Local apps
     'apps.users',
     'apps.messaging',
@@ -461,3 +462,17 @@ JAAS_KID = config('JAAS_KID', default='')
 # Private key is stored single-line in .env with literal \n; restore real newlines.
 JAAS_PRIVATE_KEY = config('JAAS_PRIVATE_KEY', default='').replace('\\n', '\n')
 JAAS_ENABLED = bool(JAAS_APP_ID and JAAS_KID and JAAS_PRIVATE_KEY)
+
+
+# --- TinyMCE (rich text editor for News articles and Mass messages) ---
+# The toolbar is deliberately small: it only exposes formatting the
+# sanitiser (apps.news.sanitiser.sanitise_rich_text) actually keeps, so the
+# editor never lets an admin author markup that gets silently stripped on
+# save.
+TINYMCE_DEFAULT_CONFIG = {
+    'menubar': False,
+    'plugins': 'lists link',
+    'toolbar': 'bold italic underline forecolor | bullist numlist | link | removeformat',
+    'branding': False,
+    'height': 320,
+}

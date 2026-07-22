@@ -1,6 +1,8 @@
 from django import forms
 from django.contrib import admin
+from tinymce.widgets import TinyMCE
 from .models import NewsItem, PromotionalBanner
+from .sanitiser import sanitise_rich_text
 
 NEWS_AUDIENCE_CHOICES = [
     ('scholar', 'Scholars'),
@@ -23,6 +25,7 @@ class NewsItemAdminForm(forms.ModelForm):
     class Meta:
         model = NewsItem
         fields = '__all__'
+        widgets = {'body': TinyMCE()}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -31,6 +34,9 @@ class NewsItemAdminForm(forms.ModelForm):
 
     def clean_audience_list(self):
         return list(self.cleaned_data.get('audience_list') or [])
+
+    def clean_body(self):
+        return sanitise_rich_text(self.cleaned_data.get('body'))
 
 
 @admin.register(NewsItem)

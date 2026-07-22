@@ -227,6 +227,46 @@ class MassMessageSendTests(TestCase):
         self.assertEqual(resp.status_code, 400)
 
 
+class MassMessageHtmlEmailTests(TestCase):
+    """Task 24: mass message emails carry the (sanitised) HTML body as the
+    primary content, with a plain-text fallback for clients that can't
+    render HTML - not the raw markup as the plain body."""
+
+    def setUp(self):
+        from django.core import mail
+        from .models import MassMessage
+        mail.outbox = []
+        self.admin = make_user('mm-html-admin@example.com', role=User.Role.ADMIN, is_staff=True)
+        self.recipient = make_user(
+            'mm-html-recipient@example.com', role=User.Role.SCHOLAR, notification_email=True,
+        )
+        self.mm = MassMessage.objects.create(
+            sender=self.admin,
+            subject='Rich announcement',
+            body='<p>Hello <b>everyone</b></p>',
+            recipient_roles=['scholar'],
+        )
+
+    def test_email_has_html_alternative_and_plain_text_fallback(self):
+        from django.core import mail
+        from .tasks import send_mass_message_task
+        send_mass_message_task(self.mm.pk)
+
+        self.assertEqual(len(mail.outbox), 1)
+        sent = mail.outbox[0]
+
+        # Plain body is markup-free.
+        self.assertNotIn('<b>', sent.body)
+        self.assertNotIn('<p>', sent.body)
+        self.assertIn('Hello', sent.body)
+        self.assertIn('everyone', sent.body)
+
+        # HTML alternative carries the original markup.
+        html_alternatives = [content for content, mimetype in sent.alternatives if mimetype == 'text/html']
+        self.assertEqual(len(html_alternatives), 1)
+        self.assertIn('<b>everyone</b>', html_alternatives[0])
+
+
 class MessageHistoryTests(TestCase):
     """The history endpoint must return every delivered message in a thread."""
 

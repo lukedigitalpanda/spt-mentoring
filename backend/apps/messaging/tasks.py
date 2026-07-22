@@ -131,11 +131,13 @@ def send_mass_message_task(mass_message_id):
         # Email (only if user has email notifications enabled)
         if recipient.notification_email and recipient.email:
             try:
+                from django.utils.html import strip_tags
                 send_mail(
                     subject=msg.subject,
-                    message=msg.body,
+                    message=strip_tags(msg.body),
                     from_email=msg.send_from_email,
                     recipient_list=[recipient.email],
+                    html_message=msg.body,
                     fail_silently=True,
                 )
             except Exception:

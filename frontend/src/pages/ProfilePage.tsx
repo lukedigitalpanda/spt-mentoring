@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../utils/api';
 import { useAuth } from '../hooks/useAuth';
@@ -626,7 +627,7 @@ function SecuritySection() {
     <div>
       <div className="flex items-center gap-2 mb-4">
         <BrandStar />
-        <h2 className="text-sm font-bold text-navy-500 uppercase tracking-widest">Security</h2>
+        <h2 className="text-sm font-bold text-navy-500 uppercase tracking-widest">Security - change your password</h2>
       </div>
       <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-card p-6 space-y-4 max-w-md">
         <p className="text-xs text-navy-500/60">Change the password you use to log in.</p>
@@ -673,6 +674,7 @@ export default function ProfilePage() {
   const { user, fetchCurrentUser } = useAuth();
   const queryClient = useQueryClient();
   const push = usePushNotifications();
+  const location = useLocation();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<User>>({});
   const [saveError, setSaveError] = useState('');
@@ -681,6 +683,18 @@ export default function ProfilePage() {
   useEffect(() => {
     if (user) setForm(user);
   }, [user]);
+
+  // Deep-link support: /profile#documents or /profile#security should scroll
+  // that section into view once the page (and its data) has rendered.
+  useEffect(() => {
+    if (!user) return;
+    const hash = location.hash.replace('#', '');
+    if (hash !== 'documents' && hash !== 'security') return;
+    const timer = setTimeout(() => {
+      document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth' });
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [user, location.hash]);
 
   const updateMutation = useMutation({
     mutationFn: (payload: Partial<User>) => api.patch(`/users/${user!.id}/`, payload),
@@ -918,8 +932,15 @@ export default function ProfilePage() {
     {/* Rendered OUTSIDE the profile <form>: this section has its own upload
         <form>, and a nested form is invalid HTML — the inner submit never
         fires, so uploads silently never send. Keep it a sibling. */}
-    <SharedDocumentsSection />
-    <SecuritySection />
+    {/* id wrappers stay mounted regardless of the sections' own loading
+        state, so the #documents / #security deep links always have a
+        target to scroll to. */}
+    <div id="documents">
+      <SharedDocumentsSection />
+    </div>
+    <div id="security">
+      <SecuritySection />
+    </div>
     </div>
   );
 }

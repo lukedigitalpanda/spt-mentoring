@@ -214,6 +214,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       </span>
                     </div>
                   </Link>
+                  <Link
+                    to="/profile#security"
+                    className="text-xs font-medium text-navy-500/50 hover:text-purple-500 transition-colors"
+                  >
+                    Change password
+                  </Link>
                   <button
                     onClick={handleLogout}
                     className="text-xs font-medium text-navy-500/50 hover:text-pink-500 transition-colors"
@@ -260,12 +266,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </Link>
             ))}
             {user && (
-              <button
-                onClick={handleLogout}
-                className="block w-full text-left px-3 py-2 text-sm text-pink-500 font-medium"
-              >
-                Sign out
-              </button>
+              <>
+                <Link
+                  to="/profile#security"
+                  onClick={() => setMobileOpen(false)}
+                  className="block px-3 py-2 rounded-lg text-sm font-medium text-navy-500/70"
+                >
+                  Change password
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="block w-full text-left px-3 py-2 text-sm text-pink-500 font-medium"
+                >
+                  Sign out
+                </button>
+              </>
             )}
           </div>
         )}

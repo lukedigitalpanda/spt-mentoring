@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../utils/api';
 import { useAuth } from '../hooks/useAuth';
@@ -646,9 +647,23 @@ export default function MessagesPage() {
                     </p>
                   </div>
                 </div>
-                <span className="text-[10px] bg-purple-100 text-purple-700 font-semibold px-2 py-1 rounded-full uppercase tracking-wider flex-shrink-0 ml-2">
-                  Moderated
-                </span>
+                <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                  {selectedConvData?.conversation_type !== 'mass_message' && (
+                    <Link
+                      to="/profile#documents"
+                      title="Shared documents"
+                      className="flex items-center gap-1 text-xs font-semibold text-purple-500 hover:text-pink-500 transition-colors"
+                    >
+                      <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                      </svg>
+                      <span className="hidden sm:inline">Shared documents</span>
+                    </Link>
+                  )}
+                  <span className="text-[10px] bg-purple-100 text-purple-700 font-semibold px-2 py-1 rounded-full uppercase tracking-wider">
+                    Moderated
+                  </span>
+                </div>
               </div>
 
               {/* Messages */}

@@ -13,6 +13,21 @@ const IS_COARSE_POINTER =
 // in the same tab (sessionStorage), unlike component state.
 const draftKey = (id: number) => `chat-draft-${id}`;
 
+// The backend sends a bare, category-level reason fragment (e.g. "it contains
+// a web link") - never the sender's actual matched text. The frontend must
+// compose this into a full sentence; the bare fragment must never be shown
+// on its own. Fall back to generic copy when `reason` is missing (older
+// payloads, or WS/REST paths that do not carry one).
+const composeFlaggedText = (reason?: string) =>
+  reason
+    ? `Your message has been held for review because ${reason}. A moderator will check it shortly.`
+    : 'Your message has been submitted and is awaiting review before delivery.';
+
+const composeBlockedText = (reason?: string, fallbackDetail?: string) =>
+  reason
+    ? `Your message could not be sent because ${reason}. Please edit it and try again.`
+    : fallbackDetail || 'Your message could not be sent. Please try again.';
+
 function ReportForm({ onSubmit, onCancel, isPending }: {
   onSubmit: (description: string) => void;
   onCancel: () => void;
@@ -163,24 +178,65 @@ export default function MessagesPage() {
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.type === 'chat_message') {
-        setWsMessages(prev => [...prev, {
-          id: data.message_id, conversation: selectedConv,
-          sender: data.sender_id, sender_name: data.sender_name,
-          body: data.body, sent_at: data.sent_at,
-          status: 'delivered', attachment: null,
-          is_read: data.sender_id === user?.id,
-        }]);
+        // Live release of a previously flagged message (or a fresh delivered
+        // send) - dedupe by message_id against whatever already holds this
+        // id, whether that's the fetched history (react-query cache) or the
+        // local WS buffer, and flip a matching flagged bubble to delivered
+        // in place rather than appending a duplicate.
+        const releasedId = data.message_id;
+        const cached = qc.getQueryData<{ results: Message[] }>(['messages', selectedConv]);
+        const cachedMsg = cached?.results.find(m => m.id === releasedId);
+        if (cachedMsg) {
+          if (cachedMsg.status !== 'delivered') {
+            qc.setQueryData<{ results: Message[] }>(['messages', selectedConv], (old) =>
+              old
+                ? {
+                    ...old,
+                    results: old.results.map(m =>
+                      m.id === releasedId
+                        ? { ...m, status: 'delivered' as const, body: data.body, sent_at: data.sent_at }
+                        : m
+                    ),
+                  }
+                : old
+            );
+          }
+        } else {
+          setWsMessages(prev => {
+            const idx = prev.findIndex(m => m.id === releasedId);
+            if (idx !== -1) {
+              const next = [...prev];
+              next[idx] = { ...next[idx], status: 'delivered', body: data.body, sent_at: data.sent_at };
+              return next;
+            }
+            return [...prev, {
+              id: data.message_id, conversation: selectedConv,
+              sender: data.sender_id, sender_name: data.sender_name,
+              body: data.body, sent_at: data.sent_at,
+              status: 'delivered', attachment: null,
+              is_read: data.sender_id === user?.id,
+            }];
+          });
+        }
         setModerationNotice(null);
       } else if (data.type === 'message_flagged') {
-        setModerationNotice({
-          type: 'flagged',
-          text: 'Your message has been submitted and is awaiting review before delivery.',
-        });
+        setModerationNotice({ type: 'flagged', text: composeFlaggedText(data.reason) });
+        // The consumer persists the message but only sends back reason/id, not
+        // the body - refetch history so the pending bubble appears (Task 5
+        // already includes the sender's own flagged messages in the listing).
+        if (data.message_id) qc.invalidateQueries({ queryKey: ['messages', selectedConv] });
       } else if (data.type === 'message_blocked') {
+        // Two shapes share this event: genuine moderation blocks (message_id
+        // present, `reason` a bare category fragment needing composition) and
+        // account/relationship guards (no message_id, `reason` already a full
+        // sentence) - never run the latter through the sentence composer.
         setModerationNotice({
           type: 'blocked',
-          text: data.reason || 'Your message could not be sent as it contains restricted content.',
+          text: data.message_id
+            ? composeBlockedText(data.reason)
+            : (data.reason || 'Your message could not be sent as it contains restricted content.'),
         });
+        if (data.message_id) qc.invalidateQueries({ queryKey: ['messages', selectedConv] });
       }
     };
     ws.onerror = () => {
@@ -228,18 +284,21 @@ export default function MessagesPage() {
     try {
       const resp = await api.post('/messaging/messages/', { conversation: selectedConv, body });
       if (resp.status === 202) {
-        setModerationNotice({
-          type: 'flagged',
-          text: 'Your message has been submitted and is awaiting review before delivery.',
-        });
+        const respData = resp.data as { moderation_reason?: string; message?: Message };
+        setModerationNotice({ type: 'flagged', text: composeFlaggedText(respData.moderation_reason) });
+        // Append the serialised message straight away so the pending bubble
+        // appears instantly, without waiting for the refetch below.
+        if (respData.message) setWsMessages(prev => [...prev, respData.message as Message]);
       }
       qc.invalidateQueries({ queryKey: ['messages', selectedConv] });
       qc.invalidateQueries({ queryKey: ['conversations'] });
     } catch (err: any) {
+      const errData = err?.response?.data as { detail?: string; moderation_reason?: string; message?: Message } | undefined;
       setModerationNotice({
         type: 'blocked',
-        text: err?.response?.data?.detail || 'Your message could not be sent. Please try again.',
+        text: composeBlockedText(errData?.moderation_reason, errData?.detail),
       });
+      if (errData?.message) setWsMessages(prev => [...prev, errData.message as Message]);
       setDraft(body);
       if (selectedConv) sessionStorage.setItem(draftKey(selectedConv), body);
       // setDraft is async, so the textarea's value (and thus scrollHeight)
@@ -487,6 +546,22 @@ export default function MessagesPage() {
                             </a>
                           ) : (
                             <p className="whitespace-pre-wrap break-words">{msg.body}</p>
+                          )}
+                          {isMine && msg.status === 'flagged' && (
+                            <span className="inline-flex items-center gap-1 mt-1.5 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-semibold text-amber-600">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              Pending review
+                            </span>
+                          )}
+                          {isMine && msg.status === 'blocked' && (
+                            <span className="inline-flex items-center gap-1 mt-1.5 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-semibold text-red-600">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636L5.636 18.364M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              Not delivered
+                            </span>
                           )}
                         </div>
                         <div className={`flex items-center mt-1 gap-2 ${isMine ? 'justify-end' : 'justify-start'}`}>

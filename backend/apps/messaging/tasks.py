@@ -9,20 +9,23 @@ SPONSOR_UPDATE_SUBJECT = 'SPT Scholarships – Time to update your sponsor'
 MATCH_EMAIL_SUBJECT = 'SPT Mentoring - You have been matched'
 
 
-def build_no_contact_body(first_name):
+def build_no_contact_body(first_name, partner_name, partner_role):
+    from django.conf import settings
     return (
         f'Hi {first_name},\n\n'
-        'It looks like you and your mentoring partner haven\'t been in touch recently. '
-        'Please log in to the SPT Mentoring Platform and send a message.\n\n'
+        f'It looks like you and your {partner_role}, {partner_name}, have not been in touch recently '
+        'on the SPT Arkwright Mentoring Platform.\n\n'
+        f'Send them a message here: {settings.FRONTEND_URL}/messages\n\n'
         'Best regards,\nSPT Mentoring Team'
     )
 
 
 def build_sponsor_update_body(first_name, sponsor_name):
+    from django.conf import settings
     return (
         f'Hi {first_name},\n\n'
         f'Your sponsor {sponsor_name} is due an update from you. '
-        'Please log in to the platform and send them an update on your progress.\n\n'
+        f'Please log in to the platform and send them an update on your progress: {settings.FRONTEND_URL}/messages\n\n'
         'Best regards,\nSPT Scholarships Team'
     )
 
@@ -203,11 +206,15 @@ def send_no_contact_reminders():
         ).order_by('-sent_at').first()
 
         if last_msg is None or last_msg.sent_at < threshold:
-            for user in [match.scholar, match.mentor]:
+            pairs = [
+                (match.scholar, match.mentor, 'mentor'),
+                (match.mentor, match.scholar, 'scholar'),
+            ]
+            for user, partner, partner_role in pairs:
                 if user.notification_email:
                     send_mail(
                         subject=NO_CONTACT_REMINDER_SUBJECT,
-                        message=build_no_contact_body(user.first_name),
+                        message=build_no_contact_body(user.first_name, partner.full_name, partner_role),
                         from_email=settings.MENTORING_FROM_EMAIL,
                         recipient_list=[user.email],
                         fail_silently=True,

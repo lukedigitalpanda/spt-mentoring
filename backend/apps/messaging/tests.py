@@ -510,3 +510,43 @@ class AdminStartConversationTests(TestCase):
         self.client.force_login(self.mentor)  # a plain mentor, not staff
         resp = self.client.get(self.url)
         self.assertIn(resp.status_code, (302, 403))  # admin_view bounces non-staff
+
+
+class NoContactReminderEmailTests(TestCase):
+    """P2-3c: no-contact reminder emails must name the mentoring partner (full
+    name + role) and link to the platform, not just say 'mentoring partner'."""
+
+    def setUp(self):
+        from django.core import mail
+        from apps.users.models import MentoringMatch
+        mail.outbox = []
+        self.scholar = make_user(
+            'noreply-scholar@example.com', role=User.Role.SCHOLAR,
+            first_name='Sam', last_name='Scholar', notification_email=True,
+        )
+        self.mentor = make_user(
+            'noreply-mentor@example.com', role=User.Role.MENTOR,
+            first_name='Mo', last_name='Mentor', notification_email=True,
+        )
+        # No messages have ever been exchanged, so the pair is stale
+        # regardless of settings.NO_CONTACT_REMINDER_DAYS.
+        self.match = MentoringMatch.objects.create(scholar=self.scholar, mentor=self.mentor)
+
+    def test_reminder_emails_name_partner_and_link_platform(self):
+        from django.conf import settings
+        from django.core import mail
+        from .tasks import send_no_contact_reminders
+        send_no_contact_reminders()
+
+        self.assertEqual(len(mail.outbox), 2)
+        by_recipient = {m.to[0]: m for m in mail.outbox}
+
+        scholar_email = by_recipient[self.scholar.email]
+        self.assertIn('Mo Mentor', scholar_email.body)
+        self.assertIn('mentor', scholar_email.body)
+        self.assertIn(f'{settings.FRONTEND_URL}/messages', scholar_email.body)
+
+        mentor_email = by_recipient[self.mentor.email]
+        self.assertIn('Sam Scholar', mentor_email.body)
+        self.assertIn('scholar', mentor_email.body)
+        self.assertIn(f'{settings.FRONTEND_URL}/messages', mentor_email.body)

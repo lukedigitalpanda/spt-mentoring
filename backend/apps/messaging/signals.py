@@ -60,6 +60,39 @@ def notify_recipients_on_delivered_message(sender, instance, created, **kwargs):
                 )
 
 
+@receiver(post_save, sender='messaging.Message')
+def reopen_support_conversation_on_inbound_message(sender, instance, created, **kwargs):
+    """Re-open a resolved support conversation when the user writes back.
+
+    Support threads (DIRECT conversations with Arkwright, subject='Support') can
+    be marked Resolved by an admin, which drops them off the "Action Required"
+    dashboard counter (it counts only support_status='open').  Previously a
+    follow-up message from the user left the thread stuck on 'resolved', so the
+    new message never re-surfaced for admins.
+
+    A newly delivered INBOUND message (sender is not Arkwright) flips a
+    'resolved' support thread back to 'open'.  Arkwright's own replies do not
+    reopen it, and an 'in_progress' thread is left alone — the admin is already
+    engaged there.
+    """
+    if instance.status != 'delivered':
+        return
+
+    conv = instance.conversation
+    if (
+        conv.subject != 'Support'
+        or conv.conversation_type != conv.ConversationType.DIRECT
+        or conv.support_status != conv.SupportStatus.RESOLVED
+    ):
+        return
+
+    if instance.sender.email == 'arkwright@spt.org':
+        return
+
+    conv.support_status = conv.SupportStatus.OPEN
+    conv.save(update_fields=['support_status'])
+
+
 @receiver(post_save, sender='messaging.AbuseReport')
 def notify_admins_on_abuse_report(sender, instance, created, **kwargs):
     """Notify all admin users immediately when an abuse report is submitted."""

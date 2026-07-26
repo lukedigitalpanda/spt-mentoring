@@ -1057,3 +1057,79 @@ class MessageIsBroadcastSerialisationTests(TestCase):
         )
         self.assertTrue(broadcast.is_broadcast)
         self.assertEqual(broadcast.body, mm.body)
+
+
+class SupportConversationReopenTests(TestCase):
+    """A resolved support conversation must re-surface on the admin dashboard
+    when the user sends a further message.
+
+    Reported by a customer: once an admin marks the initial support exchange as
+    Resolved, a follow-up message from the user left support_status stuck on
+    'resolved', so the "Action Required" dashboard counter (which counts only
+    'open') never flagged the new message.  A new INBOUND (non-Arkwright)
+    delivered message must flip the thread back to 'open'.
+    """
+
+    def setUp(self):
+        self.user = make_user('support-seeker@example.com', role=User.Role.SCHOLAR)
+        self.arkwright = make_user(
+            'arkwright@spt.org', role=User.Role.ADMIN, is_staff=True, is_superuser=True,
+        )
+        self.conv = Conversation.objects.create(
+            conversation_type=Conversation.ConversationType.DIRECT,
+            subject='Support',
+            support_status=Conversation.SupportStatus.RESOLVED,
+        )
+        self.conv.participants.set([self.user, self.arkwright])
+
+    def _deliver(self, sender, body='Hi, I have another question.'):
+        return Message.objects.create(
+            conversation=self.conv, sender=sender, body=body,
+            status=Message.Status.DELIVERED,
+        )
+
+    def test_user_reply_reopens_resolved_support_conversation(self):
+        self._deliver(self.user)
+        self.conv.refresh_from_db()
+        self.assertEqual(
+            self.conv.support_status, Conversation.SupportStatus.OPEN,
+            'A follow-up message from the user should re-open the support thread.',
+        )
+
+    def test_arkwright_reply_does_not_reopen(self):
+        """The admin answering via Arkwright must NOT bounce the thread back to
+        'open' — only the user (support seeker) re-opens it."""
+        self._deliver(self.arkwright, body='Glad that helped — anything else?')
+        self.conv.refresh_from_db()
+        self.assertEqual(self.conv.support_status, Conversation.SupportStatus.RESOLVED)
+
+    def test_reopened_conversation_appears_in_dashboard_count(self):
+        from apps.messaging.templatetags.admin_todo import admin_todo_panel
+        self.assertEqual(admin_todo_panel({})['support_convs'], 0)
+        self._deliver(self.user)
+        self.assertEqual(admin_todo_panel({})['support_convs'], 1)
+
+    def test_non_support_conversation_is_untouched(self):
+        """A normal direct message thread has support_status=None and must stay
+        that way — the reopen logic only applies to support conversations."""
+        mentor = make_user('plain-mentor@example.com', role=User.Role.MENTOR)
+        plain = Conversation.objects.create(
+            conversation_type=Conversation.ConversationType.DIRECT, subject='Chat',
+        )
+        plain.participants.set([self.user, mentor])
+        Message.objects.create(
+            conversation=plain, sender=self.user, body='hello',
+            status=Message.Status.DELIVERED,
+        )
+        plain.refresh_from_db()
+        self.assertIsNone(plain.support_status)
+
+    def test_user_reply_while_in_progress_is_left_alone(self):
+        """When an admin is actively working the thread (in_progress), a new user
+        message should not bounce it — it is already off the 'resolved' pile and
+        the admin is engaged."""
+        self.conv.support_status = Conversation.SupportStatus.IN_PROGRESS
+        self.conv.save(update_fields=['support_status'])
+        self._deliver(self.user)
+        self.conv.refresh_from_db()
+        self.assertEqual(self.conv.support_status, Conversation.SupportStatus.IN_PROGRESS)

@@ -10,7 +10,7 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       launchShowDuration: 1200,
-      backgroundColor: '#6b21a8',
+      backgroundColor: '#ffffff', // white to match the Arkwright mark on the splash/icon
       showSpinner: false,
     },
   },

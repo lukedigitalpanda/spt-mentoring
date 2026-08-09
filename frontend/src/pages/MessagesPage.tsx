@@ -5,6 +5,7 @@ import api from '../utils/api';
 import { useAuth } from '../hooks/useAuth';
 import { userHasRole } from '../utils/roles';
 import RichText from '../components/ui/RichText';
+import { wsBase } from '../utils/wsBase';
 import type { Conversation, Message } from '../types';
 
 // Touch-first devices get Enter-inserts-newline; sending is via the button only.
@@ -230,8 +231,7 @@ export default function MessagesPage() {
   useEffect(() => {
     if (!selectedConv) return;
     const token = localStorage.getItem('access_token');
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws/chat/${selectedConv}/?token=${token}`);
+    const ws = new WebSocket(`${wsBase()}/ws/chat/${selectedConv}/?token=${token}`);
     wsRef.current = ws;
     setWsMessages([]);
     setModerationNotice(null);

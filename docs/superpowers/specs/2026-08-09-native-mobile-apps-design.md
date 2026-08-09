@@ -135,10 +135,9 @@ strings are a common rejection cause).
   — no publishing blocker.
 - **Android** (`.aab`) can be built end-to-end here or in cloud CI.
 - **iOS** requires macOS + Xcode (Apple's rule; this server is Linux). The code
-  is structured fully ready; the iOS compile-and-submit step runs wherever
-  Mac/cloud access exists (a Mac, or a cloud macOS build service such as EAS
-  Build / Codemagic on a modest paid tier). **Decision still open:** which iOS
-  build path to use — does not block any build work.
+  is structured fully ready; the iOS compile-and-submit step runs on Luke's Mac
+  via Xcode. **Decided:** local Mac + Xcode (a cloud macOS build service is the
+  fallback if needed). Does not block any build work done here.
 
 ## v1 scope
 
@@ -160,5 +159,9 @@ strings are a common rejection cause).
 
 ## Open decisions
 
-1. **iOS build path** — Mac vs. cloud macOS build service. Does not block build work.
-2. **High-res logo availability** — affects icon crispness only.
+1. **High-res logo availability** — affects icon crispness only.
+
+## Resolved decisions
+
+- **iOS build path** — local Mac + Xcode (Luke has a Mac ready). Cloud macOS
+  build service is the fallback if needed.
